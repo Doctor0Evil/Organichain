@@ -1,0 +1,25 @@
+aln PATH bioaug/clinical/BioAugClinical-CheckerProfile.aln
+
+type,profile_id,key,value
+profile,BioAugClinical,iec62304class,C
+profile,BioAugClinical,iso14971profile,HighHazardNeuromod
+
+hazard,HAZ-ACT-001,description,Unintended actuator overdrive
+hazard,HAZ-ACT-001,severity,Catastrophic
+hazard,HAZ-ACT-001,probability,P2
+
+control,CTL-ACT-001,hazardid,HAZ-ACT-001
+control,CTL-ACT-001,type,ProtectiveLimit
+
+policy,net.nointernettoactuators,iec62304class,C
+policy,net.nointernettoactuators,hazardid,HAZ-ACT-001
+policy,net.nointernettoactuators,controlid,CTL-ACT-001
+backend,rust.moduleid,bioaug_actuator_guard_v1
+backend,rust.moduleid.testid,test_safe_off_on_error
+
+trace,HAZ-ACT-001,control,CTL-ACT-001
+trace,CTL-ACT-001,policy,net.nointernettoactuators
+trace,net.nointernettoactuators,backend,rust.moduleid
+
+checkerrule,BioAugClinical,fail_if_uncovered_hazard,true
+checkerrule,BioAugClinical,fail_if_unverified_classc,true

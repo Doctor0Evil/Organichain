@@ -1,0 +1,16 @@
+# /aln/datasets/ChallengeSpecV1.aln
+SECTION,SCHEMA
+ROW,field,dtype,description
+ROW,challenge_id,string,Unique ID for this challenge instance
+ROW,epoch,u64,Epoch at issuance
+ROW,policy_hash,string,Hash of ComplianceShardV2 or equivalent policy artifact
+ROW,target_metric,string,Metric name e.g. tsn_jitter_us,avg_sar_wkg,epoch_risk
+ROW,target_constraint,string,Constraint expression e.g. "tsn_jitter_us <= 1.0"
+ROW,reward_auet,u128,AU.ET reward on verified success
+ROW,reward_csp,u128,CSP reward on verified success
+ROW,penalty_auet,u128,AU.ET penalty on verified failure
+ROW,penalty_csp,u128,CSP penalty on verified failure
+ROW,verification_method,string,Verifier e.g. "TSN_ScheduleProof","SafetyEpochManifest","GovernanceAuditLog"
+ROW,expires_epoch,u64,Last epoch where challenge is valid
+ROW,engine_tags,string,Engine integration tags e.g. "Unreal:tsn-hardening","Unity:sar-lab","Godot:governance-raid"
+FOOTER,ENDOFDATASET

@@ -1,0 +1,156 @@
+name: ALN Policy + Bitrunner CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch: {}
+
+jobs:
+  aln-policy-gate:
+    name: ALN policy validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    env:
+      ALN_CHAIN_ENDPOINT: https://aln-scheduler.api.mainnet
+      ALN_POLICY_ID: policy-ci-pr
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ALN CLI
+        run: |
+          curl -fsSL https://aln-releases.example.com/aln-cli/install.sh | bash
+          echo "$HOME/.aln/bin" >> $GITHUB_PATH
+
+      - name: Evaluate ALN policy
+        id: policy
+        run: |
+          aln github fetch-pr \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pr "${{ github.event.number }}" \
+            --out pr.json
+
+          aln policy eval \
+            --policy-id "${ALN_POLICY_ID}" \
+            --input pr.json \
+            --out policy_result.json
+
+          STATUS=$(jq -r '.status' policy_result.json)
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+
+          if [ "$STATUS" = "fail" ]; then
+            echo "ALN policy failed, blocking pipeline."
+            exit 1
+          fi
+
+      - name: Comment ALN policy result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ steps.policy.outputs.status }}';
+            const body = `ALN policy result: **${status}**. See ALN dashboard for full details.`;
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+  aln-bitrunner-job:
+    name: Schedule on ALN bitrunner
+    needs: aln-policy-gate
+    if: needs.aln-policy-gate.result == 'success'
+    runs-on: self-hosted
+    # Attach labels matching your secured bitrunners, never generic fleet
+    labels:
+      - linux
+      - x64
+      - aln-bitrunner
+    permissions:
+      contents: read
+      checks: write
+    env:
+      ALN_CHAIN_ENDPOINT: https://aln-scheduler.api.mainnet
+      ALN_POLICY_ID: policy-ci-pr
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ALN CLI
+        run: |
+          curl -fsSL https://aln-releases.example.com/aln-cli/install.sh | bash
+          echo "$HOME/.aln/bin" >> $GITHUB_PATH
+
+      - name: Register ALN job ticket
+        id: ticket
+        run: |
+          COMMIT_SHA="${GITHUB_SHA}"
+          REPO="${GITHUB_REPOSITORY}"
+          PR_NUMBER="${{ github.event.number || 0 }}"
+
+          aln github register-job \
+            --repo "$REPO" \
+            --commit "$COMMIT_SHA" \
+            --pr "$PR_NUMBER" \
+            --policy-id "${ALN_POLICY_ID}" \
+            --runner-labels "self-hosted,linux,x64,aln-bitrunner" \
+            --region "us-west-2" \
+            --privacy-tier "NON-PHI" \
+            --max-runtime-s 900 \
+            --out job_ticket.json
+
+          JOB_ID=$(jq -r '.job_id' job_ticket.json)
+          echo "job_id=${JOB_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Execute workload via ALN bitrunner agent
+        id: execute
+        run: |
+          JOB_ID="${{ steps.ticket.outputs.job_id }}"
+
+          # Hand-off to local bitrunner agent (daemon on this runner host)
+          aln bitrunner execute \
+            --job-id "$JOB_ID" \
+            --config /etc/aln/bitrunner-config.yaml \
+            --metrics metrics.json
+
+          STATUS=$(jq -r '.status' metrics.json)
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+
+          if [ "$STATUS" != "success" ]; then
+            echo "Bitrunner job failed with status: $STATUS"
+            exit 1
+          fi
+
+      - name: Emit GitHub Check with ALN metrics
+        uses: actions/github-script@v7
+        env:
+          JOB_ID: ${{ steps.ticket.outputs.job_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const metrics = JSON.parse(fs.readFileSync('metrics.json', 'utf8'));
+            const summary = `
+            ALN Bitrunner Job: \`${process.env.JOB_ID}\`
+
+            - Status: **${metrics.status}**
+            - Wall time: ${metrics.wall_time_s}s
+            - Energy: ${metrics.energy_kwh} kWh
+            - Runner: ${metrics.runner_class}
+            - Code hash: \`${metrics.code_hash}\`
+            `;
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'ALN Bitrunner',
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: metrics.status === 'success' ? 'success' : 'failure',
+              output: {
+                title: 'ALN Bitrunner Execution',
+                summary
+              }
+            });

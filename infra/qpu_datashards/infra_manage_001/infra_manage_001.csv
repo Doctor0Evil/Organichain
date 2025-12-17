@@ -1,0 +1,10 @@
+component,protocol,security_policy,input_params,output_metrics,compliance_standard,destination_path
+secure_virtual_node,AES-256-GCM,zero-trust enrollment,"location:string,node_id:string",encrypted_address:string,"SOX,ISO27001","/infra/secure_nodes/${location}/${node_id}/"
+dev_tunnel_stream,Secure WebSocket WSS TLS1.3,session key isolation,"agent_id:string,websocket_url:string,tunnel_type:enum",agentic_route:object,"PCI-DSS,HIPAA","/infra/dev_tunnels/${agent_id}/sessions/"
+private_ai_stream,Differential Privacy v1.2,tamperproof ledger,"stream_id:string,AI_model:string,privacy_level:enum",encrypted_segment:binary,"GDPR,Schrems II","/infra/ai_streams/${AI_model}/${stream_id}/"
+edge_gaming_server,k-means orchestration,DDOS shield,"region:string,server_type:enum",optimized_placement:object,"DMCA","/infra/edge_gaming/${region}/${server_type}/"
+iot_register,SHA-3 PoA/PoS,biometric binding,"biometrics:object,device_mac:string",blockchain_id:string,"eIDAS,NIST SP800-63A","/infra/iot_devices/${device_mac}/biometrics/"
+neuromorphic_bci_route,STDP learning,neuro-channel isolation,"node_traffic:object,bci_signal:array<float>",adaptive_route:object,"WIPO","/infra/neuro_bci/${node_traffic.vn_id}/"
+qpu_datashard_manage,Surface Code ECC,quantum audit,"shard_id:string,error_rate:float",corrected_data:binary,"TRIPS","/infra/qpu_datashards/${shard_id}/"
+multi_party_compute,Shamir Secret Sharing,crypto split checks,"party_list:array<string>,secret:binary",recombined_secret:binary,"Safe Harbor,EU SCC","/infra/mp_compute/sessions/${datetime}/"
+audit_log_hashchain,SHA2-512 chaining,tamperproof integrity,"event_id:string,prev_hash:string",current_hash:string,"SOX,ISO27001","/infra/audit_trails/daily/${event_id}/"

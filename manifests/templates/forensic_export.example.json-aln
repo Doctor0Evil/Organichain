@@ -1,0 +1,19 @@
+{
+  "did": "did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0",
+  "timestamp": "2025-11-25T00:00:00Z",
+  "hash": "<SHA3-512>",
+  "type": "forensic_export",
+  "auditid": "ALNINFRAEPICENTER2025STAMP",
+  "policy": "NO-PYTHON-STRICT",
+  "ledger_anchor": {
+    "chain": "QUORUMX",
+    "tx_ref": "<TX_HASH_PLACEHOLDER>",
+    "zk_proof": "<ZK_SNARK_REF>"
+  },
+  "payload": {
+    "violation_class": "PYTHON_DETECTED",
+    "files": ["example.py"],
+    "actions_taken": ["reject_commit", "quarantine_file", "notify_admin"],
+    "remediation_status": "COMPLETED"
+  }
+}

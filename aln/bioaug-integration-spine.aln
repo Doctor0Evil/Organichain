@@ -1,0 +1,107 @@
+aln dataset AU.BioAug.IntegrationSpine.v1
+purpose "Unifies AU.BioAug.SecureBiomech.v1, AU.BioMechDigestPipeline, and MT6883 plugin stack into a medically-aligned, zero-trust AI-augmented transhuman infrastructure."
+
+import AU.BioAug.SecureBiomech.v1 as BioAug
+import AU.BioMechDigestPipeline.v1 as Digest
+import xAI.NanoNeuroIntegration.v1 as Nano
+import bioaugclinicalBioAugClinical-CheckerProfile as Checker
+import MT6883.PluginMatrix.v1 as MT6883Core
+
+0. GLOBAL INVARIANTS
+invariant inv.NO_NET_TO_ACTUATORS
+  forall ev in BioAug.AuditEvent
+    where ev.eventcode == 0x0101  -- net-path-evaluated
+  assert Checker.policy("net.nointernettoactuators").enforced == true
+end
+
+invariant inv.SAFETY_ENVELOPES
+  forall link in BioAug.BCILink
+    join feat in BioAug.BiomechFeature on link.featureid == feat.featureid
+  assert Digest.envelope.safe_for(feat.bodyregioncode, link.maxactuationdelta) == true
+end
+
+1. NODE CLASSIFICATION
+enum NodeClass u8
+  ClinicalQPU 1
+  EdgeBCI 2
+  DigestTwin 3
+  SafetyOrchestrator 4
+  PluginHub 5
+end
+
+record IntegrationNode
+  node_id hash64
+  ops_threshold_tops f32        -- ≥ 12 TOPS for neuromorphic/BCI nodes
+  topology_matrix_rows u16
+  topology_matrix_cols u16
+  compliance_level u8           -- 0 research, 1 clinical, 2 surgical-grade
+  ai_firmware_version u32       -- semantic version packed
+  node_class NodeClass
+end
+
+2. BIO-AUG ↔ MT6883 BINDINGS
+record BioAugToMT6883Binding
+  binding_id u64
+  useridhash hash64
+  featureid u64                  -- BioAug.BiomechFeature.featureid
+  mt6883_plugin_namehash hash32  -- hash of descriptor plugin name
+  node_id hash64                 -- IntegrationNode.node_id
+  rights_profilehash hash32      -- BioAug rights profile binding
+  clinical_profilehash hash32    -- Checker profile e.g., BioAugClinical
+end
+
+policy p.bind.bioaug.to.mt6883
+  forall b in BioAugToMT6883Binding
+    let feat = BioAug.BiomechFeature.by_id(b.featureid)
+    let node = IntegrationNode.by_id(b.node_id)
+  assert node.ops_threshold_tops >= 12.0
+  assert Checker.check_profile(b.clinical_profilehash, feat.safetytier) == "OK"
+  assert Checker.check_rights(b.rights_profilehash, b.useridhash) == "OK"
+end
+
+3. NANO/NEUROMORPHIC CONSTRAINTS
+record NanoBCIEnvelope
+  featureid u64
+  stim_type Nano.StimType
+  resonancefreqhz f32
+  amplitudemt f32
+  dutycycle f32
+  energyintegral f32
+end
+
+policy p.nano.envelope.boundary
+  forall e in NanoBCIEnvelope
+    assert Nano.nano.modulationsafety(e.stim_type, e.resonancefreqhz, e.amplitudemt) == "OK"
+    assert e.energyintegral <= Nano.constant("DAMAGE_THRESHOLD")
+end
+
+4. CLINICAL MODE SELECTION
+enum OperatingMode u8
+  ClinicProcedure 1
+  DailyAugmented 2
+  ResearchSandbox 3
+end
+
+record IntegrationSession
+  session_id hash64
+  useridhash hash64
+  mode OperatingMode
+  node_id hash64
+  start_ts ts64
+  end_ts ts64
+  digest_pipeline_enabled u8
+  nausea_orchestrator_enabled u8
+end
+
+policy p.mode.gates
+  forall s in IntegrationSession
+    if s.mode == ClinicProcedure then
+      assert s.digest_pipeline_enabled == 1u8
+      assert s.nausea_orchestrator_enabled == 1u8
+      assert Checker.enforce_class_c(s.node_id) == "PASS"
+    end
+    if s.mode == ResearchSandbox then
+      assert Digest.guard.simulation_only == true
+      assert BioAug.RightsAssertion.for_user(s.useridhash).RightSelfOwnership == true
+    end
+end

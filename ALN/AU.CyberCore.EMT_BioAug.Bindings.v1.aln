@@ -1,0 +1,66 @@
+dataset AU.CyberCore.EMT_BioAug.Bindings.v1
+
+namespace AU.CyberCore
+
+type u8    uint8
+type u32   uint32
+type u64   uint64
+type hash64 u64
+type ts64  u64
+
+import AU.BioAug.SecureBiomech.v1 as BioAug
+
+enum RightsFlag u8
+  RightExistence    1
+  RightPrivacy      2
+  RightConsent      3
+  RightSelfOwnership 4
+  RightMetaCognitive 5
+  RightAudit        6
+end
+
+record RightsAssertion
+  assertionid  u64
+  useridhash   hash64
+  featureid    u64
+  timestampms  ts64
+  rightsflag   RightsFlag
+  granted      u8
+  revoked      u8
+  reserved     u8[6]
+end
+
+record SecuritySnapshot
+  snapshotid        u64
+  featureid         u64
+  useridhash        hash64
+  timestampms       ts64
+  securitystate     BioAug.SecurityState
+  threatflag        BioAug.ThreatFlag
+  pqcenabled        u8
+  hwrootoftrust     u8
+  secureboot        u8
+  isolationenforced u8
+  reservedflags     u8[4]
+  anomalyscore01    f32
+  attacksurfacescore f32
+  lastupdatedeltams u32
+end
+
+policy gov.emt_requires_rights
+  forbid any EMTEnvelope e where
+    not exists RightsAssertion r
+      with r.useridhash == e.useridhash
+       and r.featureid  == e.featureid
+       and r.rightsflag == RightConsent
+       and r.granted    == 1u8
+  else failbuild "EMT actuation without consent"
+end
+
+policy gov.emt_follows_security_state
+  require forall EMTEnvelope e:
+    exists SecuritySnapshot s
+      with s.useridhash == e.useridhash
+       and s.featureid  == e.featureid
+       and s.securitystate in BioAug.Secure,BioAug.Degraded
+end

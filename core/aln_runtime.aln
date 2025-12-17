@@ -1,0 +1,46 @@
+MODULE aln-runtime-replacement
+  manifest:
+    author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+    original_source: core/aln_runtime.py
+    replaced_on: 2025-11-25T00:00:00Z
+    hash_of_original: UNKNOWN_PLACEHOLDER
+    policy: NO-PYTHON-STRICT
+    compliance: [HIPAA,GDPR,ISO27001,BCI-Rights-Act]
+  description: |
+    Replacement for Python ALN runtime. Provides declarative evaluation, caching, audit, consent, and decision flows purely in ALN.
+  DECISION_TYPES: [APPROVE,BLOCK,QUARANTINE,ESCALATE]
+  CACHE:
+    enabled: TRUE
+    ttl_seconds: 300
+  EVALUATION_FLOW:
+    steps:
+      - load_policy
+      - validate_context
+      - check_consent
+      - apply_rules
+      - produce_decision
+      - record_audit
+  AUDIT:
+    anchor_blockchain: TRUE
+    immutable: TRUE
+    ledger: QUORUMX
+  CONSENT:
+    lifecycle: [REQUESTED,GRANTED,REVOKED]
+  FUNCTIONS:
+    function Evaluate(entity, context) {
+      # pseudo logic in ALN style
+      if (!context.valid) { return BLOCK }
+      if (context.consent.status != GRANTED) { return QUARANTINE }
+      decision = APPLY_RULES(entity, context)
+      AuditLog.record("DECISION", decision, entity.id)
+      return decision
+    }
+    function APPLY_RULES(entity, context) {
+      score = 0
+      # rule placeholders
+      if (entity.risk > 0.7) { return ESCALATE }
+      if (entity.integrity < 0.3) { return BLOCK }
+      if (entity.quality >= 0.8) { score = score + 1 }
+      return score > 0 ? APPROVE : QUARANTINE
+    }
+END aln-runtime-replacement

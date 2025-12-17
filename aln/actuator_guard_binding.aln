@@ -1,0 +1,46 @@
+aln SCRIPT bioaug.actuator_guard_v1
+CONFIG profile BioAugClinical, iec62304class C, iso14971 HighHazardNeuromod
+
+ACTION check_stimulus_envelope
+INPUT
+    feature_id      int64,
+    subject_id      uuid,
+    amplitude_mt    float32,
+    freq_hz         float32,
+    pulse_width_ms  float32,
+    duty_cycle      float32
+EXEC
+    SET bounds_amp_max_mt   10.0
+    SET bounds_freq_min_hz  1.0
+    SET bounds_freq_max_hz  150.0
+    SET bounds_pw_min_ms    0.5
+    SET bounds_pw_max_ms    10.0
+    SET bounds_duty_max     0.25
+
+    IF amplitude_mt <= 0.0
+        OR amplitude_mt > bounds_amp_max_mt
+        OR freq_hz < bounds_freq_min_hz
+        OR freq_hz > bounds_freq_max_hz
+        OR pulse_width_ms < bounds_pw_min_ms
+        OR pulse_width_ms > bounds_pw_max_ms
+        OR duty_cycle < 0.0
+        OR duty_cycle > bounds_duty_max
+    THEN
+        RUN sql IN postgresql
+            QUERY
+            INSERT INTO security_snapshot (
+                feature_id, subject_id, timestamp_ms,
+                security_state, threat_flag,
+                pqc_enabled, hw_root_of_trust, secure_boot, isolation_enforced,
+                anomaly_score_01, attack_surface_score, last_update_delta_ms
+            ) VALUES (
+                feature_id, subject_id, NOW()::BIGINT,
+                'LOCKED_DOWN', 'POLICY_VIOLATION',
+                TRUE, TRUE, TRUE, TRUE,
+                0.95, 0.75, 0
+            );
+        RETURN status "SAFE_OFF", can_stimulate false
+    ELSE
+        RETURN status "ALLOW", can_stimulate true
+    ENDIF
+END

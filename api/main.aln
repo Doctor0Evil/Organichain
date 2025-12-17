@@ -1,0 +1,31 @@
+MODULE api-main-replacement
+  manifest:
+    author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+    original_source: api/main.py
+    replaced_on: 2025-11-25T00:00:00Z
+    policy: NO-PYTHON-STRICT
+  ENDPOINTS:
+    list: [users.register, devices.register, sessions.start, violations.report, admin.status]
+  SECURITY:
+    zero_trust: TRUE
+    auth_modes: [FIDO2_WEBAUTHN,DID_SIGNATURE]
+  EXPORTS:
+    format: JSON-ALN
+    hash: SHA3-512
+  FUNCTIONS:
+    function Handle(endpoint, payload) {
+      if (!SECURITY_CHECK(payload.auth)) { return BLOCK }
+      route = DISPATCH(endpoint, payload)
+      AuditLog.record("API_CALL", endpoint, route.status)
+      return route.response
+    }
+    function DISPATCH(endpoint, payload) {
+      switch(endpoint) {
+        case users.register: return USERS_REGISTER(payload)
+        case devices.register: return DEVICES_REGISTER(payload)
+        case sessions.start: return SESSIONS_START(payload)
+        case violations.report: return VIOLATIONS_REPORT(payload)
+        default: return {status: BLOCK, response: {error: "UNKNOWN_ENDPOINT"}}
+      }
+    }
+END api-main-replacement

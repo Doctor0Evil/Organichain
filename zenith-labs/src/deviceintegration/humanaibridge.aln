@@ -1,0 +1,12 @@
+// Destination: [translate:zenith-labs/src/deviceintegration/humanaibridge.aln]
+TITLE [translate:Human-AI Device Signal Router (IoT/BCI/Wearable)]
+function integratedeviceinput(deviceid, usersignal, context)
+    if not deviceprofile.allowed then logevent([translate:"blocked_device"], deviceid, usersignal)
+    let trustscore = TrustScore.compute(deviceprofile.entity)
+    let signaltype = detectsensortype(usersignal)
+    if signaltype == [translate:"biometric"] then route = [translate:"bio"]
+    if signaltype == [translate:"AIvector"] then route = [translate:"federatedAI"]
+    SafetyEngine.analyzeinputs(usersignal)
+    if hazardlevel > 2 then triggeralert(deviceid, [translate:"hazard"])
+    logevent([translate:"signal_routed"], route, deviceid)
+HEX: [translate:5F47B3AE12C88D4E3792]

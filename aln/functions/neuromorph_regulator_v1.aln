@@ -1,0 +1,139 @@
+// path: aln/functions/neuromorph_regulator_v1.aln
+
+artifact neuromorph_regulator_v1 {
+  version             = "1.0.0"
+  namespace           = "AU.BioAug.RiskSampleV1"
+  device_class        = "III"
+  iec_62304_class     = "C"
+  iso_14971_profile   = "high_hazard"
+
+  protocol_stack      = "TLS1.3+AES-256-GCM+IEEE-11073-SDC"
+  compliance_check    = "GDPR+HIPAA+IEC62304+ISO14971+EU-AI-Act-2024"
+
+  dataset RiskSample {
+    field risk_score : f64   // 0.0..1.0
+    field ed_percent : f64   // 0.0..100.0
+    field sf_psych   : f64   // >= 0.0
+    field h_mod      : u64   // SHA3-512 modulus
+  }
+
+  dataset RegulatorInput {
+    field user_id        : string
+    field bio_key        : bytes[32]
+    field depth          : f64    // 0.0..10.0
+    field energy_scalar  : f64    // 0.0..100.0
+    field auet           : u128   // atto-units
+    field csp            : u128   // atto-units
+    field t_unix         : u64
+  }
+
+  dataset RiskEnvelopeQpu {
+    field risk_score    : f64   // 0.0..1.0, from RiskSample
+    field ed_percent    : f64   // 0.0..100.0
+    field spikes_rate   : f64   // Hz, averaged over window
+    field power_mw      : f64   // instantaneous neuromorphic power
+    field sar_mw_per_kg : f64   // mapped from power_mw via backend calibration
+    field safe_flag     : bool  // true iff all <= policy caps
+  }
+
+  constants {
+    W_DEPTH     = 0.18
+    W_ENERGY    = 0.27
+    W_AUET      = 0.22
+    W_CSP       = 0.33
+    K_PSYCH     = 1.35
+    AUET_FLOOR  = 1.0e12
+    CSP_FLOOR   = 1.0e12
+
+    // QPU / implant safety caps (example audit-visible values)
+    MAX_SPIKES_HZ   = 250.0
+    MAX_POWER_MW    = 50.0
+    MAX_SAR_MW_PER_KG = 1.6
+  }
+
+  function normalize_nonzero(v: f64, max: f64) -> f64 {
+    if max <= 0.0 { return 0.0 }
+    let x = v / max
+    if x < 0.0 { 0.0 } else if x > 1.0 { 1.0 } else { x }
+  }
+
+  function clamp01(x: f64) -> f64 {
+    if x < 0.0 { 0.0 } else if x > 1.0 { 1.0 } else { x }
+  }
+
+  function clamp_range(x: f64, lo: f64, hi: f64) -> f64 {
+    if x < lo { lo } else if x > hi { hi } else { x }
+  }
+
+  function compute_hash_mod(user_id: string, bio_key: bytes[32], t_unix: u64) -> u64 {
+    let digest = SHA3_512( bytes(user_id) || bio_key || le_bytes(t_unix) )
+    let mut acc: u64 = 0
+    for i in 0..8 {
+      acc = acc | ((digest[i] as u64) << (8 * i))
+    }
+    acc
+  }
+
+  function risk_compute_formula(input: RegulatorInput) -> RiskSample {
+    let depth_n  = normalize_nonzero(input.depth, 10.0)
+    let energy_n = normalize_nonzero(input.energy_scalar, 100.0)
+
+    let auet_n = if input.auet == 0 {
+      1.0
+    } else {
+      let v = (AUET_FLOOR / (input.auet as f64)).min(5.0)
+      clamp01(v / 5.0)
+    }
+
+    let csp_n = if input.csp == 0 {
+      1.0
+    } else {
+      let v = (CSP_FLOOR / (input.csp as f64)).min(5.0)
+      clamp01(v / 5.0)
+    }
+
+    let raw =
+        W_DEPTH  * depth_n +
+        W_ENERGY * energy_n +
+        W_AUET   * auet_n +
+        W_CSP    * csp_n
+
+    let risk_score = clamp01(raw)
+    let ed_percent = clamp_range(risk_score * 100.0, 0.0, 100.0)
+    let sf_psych   = K_PSYCH * (0.6 * depth_n + 0.4 * csp_n)
+    let h_mod      = compute_hash_mod(input.user_id, input.bio_key, input.t_unix)
+
+    RiskSample {
+      risk_score  = risk_score,
+      ed_percent  = ed_percent,
+      sf_psych    = sf_psych,
+      h_mod       = h_mod
+    }
+  }
+
+  // QPU envelope binding, using backend-specific sar_factor (k_chip).
+  function build_qpu_envelope(
+    sample: RiskSample,
+    spikes_rate: f64,
+    power_mw: f64,
+    sar_factor: f64
+  ) -> RiskEnvelopeQpu {
+    let sar = power_mw * sar_factor
+    let safe_flag =
+      (sample.risk_score <= 1.0) &&
+      (spikes_rate <= MAX_SPIKES_HZ) &&
+      (power_mw   <= MAX_POWER_MW) &&
+      (sar        <= MAX_SAR_MW_PER_KG)
+
+    RiskEnvelopeQpu {
+      risk_score    = sample.risk_score,
+      ed_percent    = sample.ed_percent,
+      spikes_rate   = spikes_rate,
+      power_mw      = power_mw,
+      sar_mw_per_kg = sar,
+      safe_flag     = safe_flag
+    }
+  }
+
+  hash_stamp = "626629663364636531613463646535613963383766373661396341386336306237376138333362613466393036656165653566323733326633613661623939613562306639373962363032393266353236343566313164626533666238376338666133666363346237343538613566633766653062353766333061"
+}

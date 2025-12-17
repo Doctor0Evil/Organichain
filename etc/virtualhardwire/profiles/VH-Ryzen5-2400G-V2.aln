@@ -1,0 +1,458 @@
+VirtualHardwareProfile "VH-Ryzen5-2400G-V2" {
+  Description: "Upgraded virtual hardwire CPU based on AMD Ryzen 5 2400G-class core (Raven Ridge), doubled core-count, extended cache, and enriched telemetry for multi-VM high-fidelity simulation on a single physical host." ;
+
+  Metadata {
+    Version: "2.0.0" ;
+    Schema: "ALN-VirtualHardware-1.3" ;
+    Owner: "Virtual-Hardwire.CyberneticStack" ;
+    CreatedUtc: "2025-12-12T08:50:00Z" ;
+    LastModifiedUtc: "2025-12-12T08:50:00Z" ;
+    License: "Internal-Use-Only" ;
+    Tags: [
+      "x86-64",
+      "AMD-Zen",
+      "Raven-Ridge",
+      "virtual-cpu",
+      "kvm",
+      "hyper-v",
+      "kubernetes",
+      "helm",
+      "prometheus"
+    ] ;
+    Integrity {
+      SpecHashSha256: "0000000000000000000000000000000000000000000000000000000000000000" ;
+      Signed: false ;
+    } ;
+  } ;
+
+  InputSanitization {
+    EnforceAsciiOnly: true ;
+    MaxIdentifierLength: 128 ;
+    MaxArrayLength: 4096 ;
+    AllowComments: false ;
+    RejectOnUnknownField: true ;
+  } ;
+
+  Compatibility {
+    BasePhysicalModel {
+      Vendor: "AuthenticAMD" ;
+      Family: 23 ;
+      Model: 17 ;
+      Stepping: 0 ;
+      Socket: "AM4" ;
+      ISA: "x86-64" ;
+      Microarchitecture: "Zen-RavenRidge" ;
+      ProcessNm: 14 ;
+      TdpWattsNominal: 65 ;
+      MaxMemoryGiB: 64 ;
+    } ;
+
+    GuestBinaryCompatibility {
+      PreserveCPUIDVendorString: true ;
+      PreserveFamilyModelEncoding: true ;
+      OverrideSteppingVirtual: 1 ;
+      PreserveLegacyFeatures: [
+        "x86-64",
+        "sse",
+        "sse2",
+        "sse3",
+        "ssse3",
+        "sse4_1",
+        "sse4_2",
+        "avx",
+        "avx2",
+        "aes",
+        "fma3",
+        "cx16",
+        "cx8",
+        "cmov",
+        "mmx",
+        "pclmulqdq",
+        "popcnt",
+        "rdtscp",
+        "tsc",
+        "tsc-deadline"
+      ] ;
+      AddVirtualExtensions: [
+        "amd-v",
+        "amd-vi",
+        "smep",
+        "smap",
+        "nx-bit",
+        "pae",
+        "1gb-pages",
+        "pcid",
+        "invpcid",
+        "rdtscp-stable",
+        "xsaveopt",
+        "xsaves",
+        "clflushopt"
+      ] ;
+      CpuidMaskingPolicy {
+        Mode: "COMPATIBILITY_FIRST" ;   // COMPATIBILITY_FIRST | PERFORMANCE_FIRST
+        StableTsc: true ;
+        ExposeInvariantTsc: true ;
+      } ;
+    } ;
+  } ;
+
+  CPU {
+    VirtualModelId: "VH-R5-2400G-V2" ;
+    Generation: "RavenRidge-Plus" ;
+    CoresPhysicalVisible: 8 ;         // vCores per new VM
+    ThreadsPerCore: 2 ;
+    LogicalProcessorsVisible: 16 ;
+    SMTEnabled: true ;
+    ApicIdStride: 2 ;
+    Topology {
+      Sockets: 1 ;
+      DiesPerSocket: 1 ;
+      CcdPerDie: 1 ;
+      CoresPerCcd: 8 ;
+      ThreadsPerCore: 2 ;
+      NumaNodes: 1 ;
+      NumaNodeMapping: [
+        { NodeId: 0 ; CoreRange: "0-7" ; }
+      ] ;
+    } ;
+
+    FrequencyPlan {
+      BaseClockMHz: 4000 ;            // ≥ original 3600 MHz[web:1][web:2]
+      MaxBoostSingleCoreMHz: 4400 ;
+      MaxBoostAllCoreMHz: 4200 ;
+      ReferenceExtClockMHz: 100 ;
+      VoltageRangeMilliVolt: {
+        Min: 800 ;
+        Nominal: 1150 ;
+        Max: 1350 ;
+      } ;
+      TurboPolicy {
+        Allowed: true ;
+        TargetUtilizationPercent: 85 ;
+        HysteresisMs: 50 ;
+        BoostStepMHz: 25 ;
+        BoostDecisionWindowMs: 20 ;
+        TemperatureHeadroomTargetC: 15 ;
+      } ;
+      FrequencyTranslation {
+        LegacyBaseClockMHz: 3600 ;
+        LegacyMinGuaranteeMHz: 3600 ;
+        NewFloorMHz: 4000 ;
+        LegacyToNewScaleFactor: 1.11 ;
+      } ;
+    } ;
+
+    ThermalPowerModel {
+      VirtualTdpWatts: 95 ;
+      MaxJunctionTempC: 95 ;
+      ThrottleStartTempC: 90 ;
+      ThrottleClockFloorMHz: 3600 ;
+      PowerLimitLongTermWatts: 88 ;
+      PowerLimitShortTermWatts: 110 ;
+      PowerLimitShortTermDurationMs: 1000 ;
+    } ;
+
+    CacheHierarchy {
+      LineSizeBytes: 64 ;
+
+      L1Instruction {
+        TotalSizeKiB: 512 ;
+        PerCoreSizeKiB: 64 ;
+        AssociativityWays: 4 ;
+        LatencyCycles: 4 ;
+        WritePolicy: "NA" ;
+        ReplacementPolicy: "LRU" ;
+      } ;
+
+      L1Data {
+        TotalSizeKiB: 256 ;
+        PerCoreSizeKiB: 32 ;
+        AssociativityWays: 8 ;
+        LatencyCycles: 4 ;
+        WritePolicy: "WriteBack" ;
+        ReplacementPolicy: "LRU" ;
+      } ;
+
+      L2 {
+        TotalSizeKiB: 4096 ;
+        PerCoreSizeKiB: 512 ;
+        AssociativityWays: 8 ;
+        LatencyCycles: 12 ;
+        InclusiveOfL1: false ;
+        WritePolicy: "WriteBack" ;
+        ReplacementPolicy: "LRU" ;
+      } ;
+
+      L3 {
+        TotalSizeKiB: 8192 ;
+        SharedByAllCores: true ;
+        AssociativityWays: 16 ;
+        LatencyCycles: 35 ;
+        InclusiveOfL2: false ;
+        SegmentCount: 2 ;
+        Segments: [
+          { SegmentId: 0 ; SizeKiB: 4096 ; HomeCoreRange: "0-3" ; },
+          { SegmentId: 1 ; SizeKiB: 4096 ; HomeCoreRange: "4-7" ; }
+        ] ;
+      } ;
+    } ;
+
+    MemoryController {
+      Controllers: 1 ;
+      Channels: 2 ;
+      RanksPerChannelMax: 2 ;
+      MaxCapacityMiB: 65536 ;         // 64 GiB[web:1]
+      SupportedTypes: [
+        "DDR4-2400",
+        "DDR4-2666",
+        "DDR4-2933"
+      ] ;
+      PeakTheoreticalBandwidthGiBps: 44.0 ;  // DDR4-2933 dual-channel[web:1]
+      CommandRateOptions: ["1T", "2T"] ;
+      InterleaveGranularityKiB: 64 ;
+      ECCSupported: true ;
+      ECCMode: "END_TO_END_VIRTUAL" ;
+      RefreshIntervalUs: 7800 ;
+      AddressWidthBitsPhysical: 48 ;
+      AddressWidthBitsVirtual: 48 ;
+    } ;
+
+    Virtualization {
+      AmdV_SVM: true ;
+      AmdVi_IOMMU: true ;
+      SecondLevelAddressTranslation: true ;
+      NestedPaging: true ;
+      NestedVirtualizationSupported: true ;
+      MaxGuestVcpuPerVm: 16 ;
+      MaxConcurrentVmsRecommended: 32 ;
+      InterruptRemapping: true ;
+      PostedInterrupts: true ;
+      ApicVirtualization: "X2APIC" ;
+      TscOffsetting: true ;
+      VmcbCleanBitsOptimization: true ;
+    } ;
+
+    SchedulingModel {
+      HostCpuOvercommitRatioMax: 3.0 ;
+      TimesliceMsDefault: 4 ;
+      TimesliceMsLowLatency: 1 ;
+      TimesliceMsBatch: 8 ;
+      PreemptionGranularityNs: 250000 ;
+      LoadBalancing {
+        Strategy: "NUMA_AWARE_ROUND_ROBIN" ;
+        MigrateThresholdPercent: 65 ;
+        PinIoIntensiveVcpu: true ;
+        PreferLocalNuma: true ;
+        AvoidCrossSocket: true ;
+      } ;
+      PriorityBands {
+        High {
+          TimesliceMs: 1 ;
+          OvercommitRatioMax: 1.0 ;
+        } ;
+        Normal {
+          TimesliceMs: 4 ;
+          OvercommitRatioMax: 2.0 ;
+        } ;
+        Batch {
+          TimesliceMs: 8 ;
+          OvercommitRatioMax: 3.0 ;
+        } ;
+      } ;
+    } ;
+  } ;
+
+  PreviousChipsetUpgrade {
+    PreviousVirtualCpuId: "VH-R5-2400G-V1" ;
+
+    MigrationPolicy {
+      HotMigrationSupported: true ;
+      PreserveGuestApicIds: true ;
+      PreserveCoreTopologyHint: true ;
+      MaxDowntimeMsDuringLiveMigration: 500 ;
+      SuspendResumeFallbackAllowed: true ;
+      CpuFeatureMasking {
+        EnabledByDefault: true ;
+        MaskedFeaturesForLegacyGuests: [
+          "smap",
+          "1gb-pages"
+        ] ;
+      } ;
+    } ;
+
+    ResourceUpgradeMapping {
+      OldCores: 4 ;
+      OldThreads: 8 ;
+      NewCores: 8 ;
+      NewThreads: 16 ;
+
+      OldBaseClockMHz: 3600 ;
+      NewBaseClockMHz: 4000 ;
+
+      OldL2TotalKiB: 2048 ;
+      NewL2TotalKiB: 4096 ;
+
+      OldL3TotalKiB: 4096 ;
+      NewL3TotalKiB: 8192 ;
+
+      GuaranteeRules {
+        MinPerGuestThroughputFactorVsOld: 1.10 ;
+        MinAggregateThroughputFactorVsOld: 2.00 ;
+        AllowBurstBeyondAggregateFactor: true ;
+      } ;
+
+      LegacyVmHandling {
+        DefaultVisibleCores: 4 ;
+        DefaultVisibleThreads: 8 ;
+        SchedulerPlacement: "MAP_TO_FULL_8C_SET" ;
+        PreferHighFreqCores: true ;
+      } ;
+    } ;
+  } ;
+
+  Telemetry {
+    Sampling {
+      DefaultIntervalMs: 1000 ;
+      MinIntervalMs: 200 ;
+      MaxIntervalMs: 10000 ;
+    } ;
+    Counters {
+      PerCore {
+        Metrics: [
+          "cycles",
+          "instructions",
+          "cpi",
+          "cache-misses-l1d",
+          "cache-misses-l2",
+          "cache-misses-l3",
+          "branch-mispredicts",
+          "frequency-effective-mhz",
+          "temperature-c",
+          "power-watts-estimated"
+        ] ;
+      } ;
+      PerVm {
+        Metrics: [
+          "vcpu-runtime-ms",
+          "vcpu-wait-io-ms",
+          "vcpu-steal-ms",
+          "vcpu-ready-ms",
+          "vcpu-context-switches",
+          "vcpu-migrations"
+        ] ;
+      } ;
+    } ;
+    Export {
+      Protocols: [
+        "prometheus",
+        "redfish-like"
+      ] ;
+      MaxCardinalitySeries: 20000 ;
+    } ;
+  } ;
+
+  PlatformBindings {
+    Linux {
+      KernelModules: ["kvm_amd", "vfio_pci"] ;
+      QemuCpuModelString: "EPYC-v4-vhr5-2400g-v2" ;
+      KernelCmdlineAppend: [
+        "amd_iommu=on",
+        "kvm_amd.npt=1",
+        "kvm_amd.avic=1"
+      ] ;
+      MinKernelVersion: "5.15.0" ;
+      LibvirtCpuMode: "custom" ;
+      LibvirtCpuModel: "vh-r5-2400g-v2" ;
+    } ;
+
+    Windows {
+      Hypervisor: ["Hyper-V", "KVM-on-Windows-via-WSL2"] ;
+      MinHostOsVersion: "10.0.19044" ;
+      RecommendedPowerPlan: "High performance" ;
+      FirmwareRequirements {
+        SvmRequired: true ;
+        IommuRequired: true ;
+        VirtualizationFlags: ["SVM", "IOMMU", "NX"] ;
+      } ;
+      HyperV {
+        DefaultVcpuPerVmNew: 8 ;
+        DefaultVcpuPerVmLegacy: 4 ;
+        MaxVcpuPerVm: 16 ;
+      } ;
+    } ;
+
+    Kubernetes {
+      Runtime: ["containerd", "cri-o"] ;
+      NodeLabel: "vh.cpu/model=vh-r5-2400g-v2" ;
+      CpuManagerPolicy: "static" ;
+      TopologyManagerPolicy: "best-effort" ;
+      GuaranteedPodCpuLimitRatioMax: 1.0 ;
+      Overcommit {
+        ClusterCpuOvercommitRatio: 1.5 ;
+        PodBurstableLimitRatio: 2.0 ;
+      } ;
+      ResourceClasses {
+        Small {
+          RequestMillicores: 250 ;
+          LimitMillicores: 500 ;
+        } ;
+        Medium {
+          RequestMillicores: 1000 ;
+          LimitMillicores: 2000 ;
+        } ;
+        Large {
+          RequestMillicores: 2000 ;
+          LimitMillicores: 4000 ;
+        } ;
+      } ;
+    } ;
+
+    Helm {
+      ChartAnnotation: "virtualhardwire.io/cpu-profile: vh-r5-2400g-v2" ;
+      ValuesSchema {
+        cpuProfileKey: "vh-r5-2400g-v2" ;
+        defaultVcpuPerPod: 2 ;
+        maxVcpuPerPod: 8 ;
+        profileTuning {
+          enableLowLatency: false ;
+          preferLocalNuma: true ;
+        } ;
+      } ;
+    } ;
+
+    Prometheus {
+      Metrics {
+        ExporterName: "vh_cpu_exporter" ;
+        ScrapeIntervalSeconds: 5 ;
+        EndpointPath: "/metrics" ;
+        Series {
+          Name: "vh_cpu_core_utilization" ;
+          Labels: ["core_id", "socket_id"] ;
+          Unit: "percent" ;
+        } ;
+        Series {
+          Name: "vh_cpu_freq_effective_mhz" ;
+          Labels: ["core_id"] ;
+          Unit: "MHz" ;
+        } ;
+        Series {
+          Name: "vh_cpu_vm_vcpu_runtime_ms" ;
+          Labels: ["vm_id", "vcpu_id"] ;
+          Unit: "milliseconds" ;
+        } ;
+      } ;
+    } ;
+  } ;
+
+  Validation {
+    MaxVcpuPerHost: 128 ;
+    MaxVmPerHost: 64 ;
+    MinHostMemoryGiB: 32 ;
+    MinHostCores: 8 ;
+    SanityChecks {
+      RequireStableTsc: true ;
+      RequireSvmOrVmX: true ;
+      RejectIfOversubscribedBeyondRatio: 3.0 ;
+    } ;
+  } ;
+}

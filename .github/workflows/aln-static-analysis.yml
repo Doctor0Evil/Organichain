@@ -1,0 +1,66 @@
+name: "ALN Static Analysis & Sanity Checks"
+on:
+  push:
+    paths:
+      - 'aln/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'aln/**'
+
+env:
+  UPLOADED_FILE_URL: "file:///mnt/data/Chat_Wars.txt"
+
+jobs:
+  lint:
+    name: Validate ALN files and repository sanity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show uploaded file location (for CI operator)
+        run: |
+          echo "Uploaded file reference: $UPLOADED_FILE_URL"
+          ls -la || true
+
+      - name: Basic ALN syntax check (heuristic)
+        run: |
+          set -euo pipefail
+          FOUND=0
+          for f in $(git ls-files 'aln/**' || true); do
+            if grep -q "NETWORK" "$f"; then
+              FOUND=1
+              if ! grep -q "END NETWORK" "$f"; then
+                echo "ERROR: $f missing END NETWORK"
+                exit 2
+              fi
+              OPEN=$(grep -o '{' "$f" | wc -l || true)
+              CLOSE=$(grep -o '}' "$f" | wc -l || true)
+              if [ "$OPEN" -ne "$CLOSE" ]; then
+                echo "ERROR: $f braces mismatch (open=$OPEN close=$CLOSE)"
+                exit 3
+              fi
+            fi
+          done
+          if [ "$FOUND" -eq 0 ]; then
+            echo "No ALN files found - nothing to lint."
+          else
+            echo "ALN heuristic checks passed."
+          fi
+
+      - name: Compute checksum of uploaded file (operator-supplied path)
+        run: |
+          if [ -e "/mnt/data/Chat_Wars.txt" ]; then
+            sha256sum /mnt/data/Chat_Wars.txt | tee aln_uploaded_sha256.txt
+          else
+            echo "/mnt/data/Chat_Wars.txt not present on runner; ensure infra exposes it."
+          fi
+
+      - name: Upload ALN lint report
+        uses: actions/upload-artifact@v4
+        with:
+          name: aln-lint-report
+          path: |
+            aln_uploaded_sha256.txt
+            || true

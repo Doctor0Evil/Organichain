@@ -1,0 +1,23 @@
+// Destination: [translate:zenith-labs/src/core/objectdefinitions.aln]
+TITLE [translate:Advanced Object Class for Biosensing and City Safety]
+objectclass [translate:VirtualNode] {
+    id:[translate:string]
+    type:enum([translate:AVATAR], [translate:SENSOR], [translate:SAFETYZONE], [translate:RESEARCHPORTAL])
+    geolocation:{lat:[translate:float], lon:[translate:float], radius:[translate:float]}
+    operationalstatus:enum([translate:ACTIVE], [translate:STANDBY], [translate:BLOCKED])
+    compliance:enum([translate:HIPAA], [translate:GDPR], [translate:NONE])
+    agency:[translate:string]
+    interactionpolicy:[translate:string]
+    function updatestatus(newstatus)
+}
+objectclass [translate:PhysicalObject] {
+    id:[translate:string]
+    category:[translate:string]
+    tags:[[translate:string]]
+    geolocation:{lat:[translate:float], lon:[translate:float], alt:[translate:float]}
+    safetystatus:enum([translate:SUSPECT], [translate:CLEARED], [translate:BLOCKED])
+    hazardlevel:[translate:int]
+    ownerid:[translate:string]
+    function scansafetyinputs()
+}
+HEX: [translate:8DA4FB222CEA92B1D9A7]

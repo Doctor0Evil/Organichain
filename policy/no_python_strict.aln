@@ -1,0 +1,20 @@
+POLICY NO-PYTHON-STRICT
+  author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+  enforce: [BLOCK_PYTHON, ONLY_ALN]
+  scope: REPOSITORY
+  description: |
+    Python (*.py) generation, storage, execution, or reference is strictly prohibited.
+    All modules and workflows must use ALN format exclusively.
+    Any detected Python artifact triggers automatic rejection, quarantine, audit, and alert escalation.
+  action_on_detection: [reject_commit, quarantine_file, notify_admin, trigger_audit, generate_forensic_export]
+  escalation:
+    severity_map:
+      LOW: notify_admin
+      MEDIUM: notify_admin, record_audit
+      HIGH: notify_admin, record_audit, trigger_forensic
+      CRITICAL: notify_admin, record_audit, trigger_forensic, emergency_detected
+  rollback: ENABLED
+  audit_binding: LEDGER_IMMUTABLE
+  hash_algorithm: SHA3-512
+  created: 2025-11-25T00:00:00Z
+END POLICY

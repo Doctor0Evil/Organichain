@@ -1,0 +1,416 @@
+// ======================================================================
+// CYBERNETIC ENERGY LEDGER PIPELINE
+// Dual‑pool energy, safety envelope, provenance, and audit
+// Target: AU / Smart‑City / BCI stacks (Rust + Unreal/Unity/Godot backends)
+// ======================================================================
+
+pipeline CYBERNETIC_ENERGY_V1 {
+    version "1.0.0";
+    language "rust";
+    targets ["bci-device", "exoskeleton", "xr-rig", "smart-city-node"];
+
+    // ------------------------------------------------------------------
+    // 0. Filesystem layout (must exist in repo)
+    // ------------------------------------------------------------------
+    fs.layout {
+        dir "snapshots/";
+        dir "logs/";
+        dir "aln-energy/";
+        dir "aln-ledger/";
+        dir "aln-cli/";
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Core energy state vectors (AU.ET/CSP + E_a + dual pool + safety)
+    // ------------------------------------------------------------------
+    module "aln-logs::energy_state" {
+        struct EnergyState {
+            auet: u128;      // fungible cybernetic energy
+            csp: u128;       // capability / safety points
+            e_compute: u128; // E_a[0] – compute axis
+            e_bio: u128;     // E_a[1] – bio / physiological axis
+            e_risk: u128;    // E_a[2] – risk / hazard axis
+            fast: u128;      // E_fast – short‑term session energy
+            slow: u128;      // E_slow – long‑term reserve
+            safety_budget: u64; // S – per‑agent daily safety envelope
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Dual‑pool energy implementation (per‑epoch stepping)
+    // ------------------------------------------------------------------
+    module "aln-energy::dual_energy" {
+        struct DualEnergy {
+            fast: u128;
+            slow: u128;
+        }
+
+        fn step(
+            self,
+            drain_fast: u128,
+            drain_slow: u128,
+            regen_fast: u128,
+            regen_slow: u128
+        ) -> DualEnergy {
+            let new_fast = self.fast
+                .saturating_sub(drain_fast)
+                .saturating_add(regen_fast);
+            let new_slow = self.slow
+                .saturating_sub(drain_slow)
+                .saturating_add(regen_slow);
+            DualEnergy { fast: new_fast, slow: new_slow }
+        }
+
+        invariant NonNegativeFastSlow {
+            assert(self.fast >= 0);
+            assert(self.slow >= 0);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Safety envelope (per‑agent safety budget)
+    // ------------------------------------------------------------------
+    module "aln-energy::safety_envelope" {
+        struct SafetyBudget {
+            remaining: u64;
+        }
+
+        fn can_use(self, cost: u64) -> bool {
+            self.remaining >= cost
+        }
+
+        fn record_use(self, cost: u64) -> SafetyBudget {
+            SafetyBudget {
+                remaining: self.remaining.saturating_sub(cost),
+            }
+        }
+
+        fn ability_risk_cost(level: u32, weight: f32) -> u64 {
+            // strictly monotone in level, clamps to non‑negative
+            let raw = (level as f64) * (weight as f64);
+            to_u64_floor(raw)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Provenance and mapping from external credits → AU.ET/CSP + E_a
+    // ------------------------------------------------------------------
+    module "aln-energy::math_helpers" {
+        fn to_u128_floor(x: f64) -> u128 {
+            if x.is_nan() || x.is_sign_negative() {
+                0
+            } else {
+                x.floor() as u128
+            }
+        }
+
+        fn to_u64_floor(x: f64) -> u64 {
+            if x.is_nan() || x.is_sign_negative() {
+                0
+            } else {
+                x.floor() as u64
+            }
+        }
+    }
+
+    module "aln-energy::provenance_mapping" {
+        use crate::math_helpers::{to_u128_floor};
+
+        struct SourceState {
+            chain_id: String;
+            height: u64;
+            denom: String;
+            address: String;
+            balance: String; // raw string from chain RPC
+            decimals_src: u32;
+        }
+
+        struct MappingParams {
+            c_e: f64;      // AU.ET compression factor
+            c_s: f64;      // CSP compression factor
+            c_ec: f64;     // E_compute factor
+            c_eb: f64;     // E_bio factor
+            c_er: f64;     // E_risk factor
+            d_aln: u32;    // internal decimal exponent
+        }
+
+        struct MappedAmounts {
+            auet_units: u128;
+            csp_units: u128;
+            e_compute: u128;
+            e_bio: u128;
+            e_risk: u128;
+        }
+
+        fn map_to_energy(src: &SourceState, p: &MappingParams) -> MappedAmounts {
+            let b_raw: f64 = src.balance.parse::<f64>().unwrap_or(0.0);
+            let a_src = b_raw / 10f64.powi(src.decimals_src as i32);
+
+            let a_e = a_src * p.c_e;
+            let a_s = a_src * p.c_s;
+            let a_ec = a_src * p.c_ec;
+            let a_eb = a_src * p.c_eb;
+            let a_er = a_src * p.c_er;
+
+            let scale = 10f64.powi(p.d_aln as i32);
+
+            let b_e = to_u128_floor(a_e * scale);
+            let b_s = to_u128_floor(a_s * scale);
+            let e_compute = to_u128_floor(a_ec * scale);
+            let e_bio = to_u128_floor(a_eb * scale);
+            let e_risk = to_u128_floor(a_er * scale);
+
+            MappedAmounts {
+                auet_units: b_e,
+                csp_units: b_s,
+                e_compute,
+                e_bio,
+                e_risk,
+            }
+        }
+
+        fn provenance_hash(state: &SourceState) -> String {
+            use sha2::{Digest, Sha256};
+            let blob = format!(
+                "{}|{}|{}|{}|{}",
+                state.chain_id,
+                state.height,
+                state.denom,
+                state.address,
+                state.balance
+            );
+            let mut h = Sha256::new();
+            h.update(blob.as_bytes());
+            hex::encode(h.finalize())
+        }
+
+        property MonotoneInBalance {
+            // For all B2 >= B1 with fixed params, AU.ET, CSP, and E_a never decrease
+            // (property‑based test in Rust using proptest)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Ledger events, append‑only log, snapshots, and replay
+    // ------------------------------------------------------------------
+    module "aln-ledger::events" {
+        use crate::aln_logs::energy_state::EnergyState;
+
+        enum EnergyReason {
+            Transfer,
+            AbilityUse,
+            Overclock,
+            ExternalCreditMap,
+            AdminAdjust,
+        }
+
+        struct EnergyVectorDelta {
+            delta_e_compute: i128;
+            delta_e_bio: i128;
+            delta_e_risk: i128;
+        }
+
+        struct DualEnergyDelta {
+            delta_fast: i128;
+            delta_slow: i128;
+        }
+
+        struct SafetyDelta {
+            delta_safety_budget: i64;
+        }
+
+        struct EnergyEvent {
+            seq: u64;
+            agent_id: String;
+            reason: EnergyReason;
+            delta_auet: i128;
+            delta_csp: i128;
+            vector: EnergyVectorDelta;
+            dual: DualEnergyDelta;
+            safety: SafetyDelta;
+            provenance: Option<String>; // hash from external mapping
+            epoch: u64;
+        }
+
+        struct EventRecord {
+            event: EnergyEvent;
+            event_hash: String;
+            signature: Option<String>; // hex
+            signer_id: Option<String>;
+        }
+    }
+
+    module "aln-ledger::state" {
+        use crate::aln_logs::energy_state::EnergyState;
+        use crate::aln_ledger::events::{EnergyEvent, EnergyReason};
+
+        struct Ledger {
+            states: Map<String, EnergyState>;
+            last_seq: u64;
+            last_event_hash: String;
+            epoch_hash: String;
+            max_total_auet: u128;
+            max_total_csp: u128;
+            max_total_e_compute: u128;
+            max_total_e_bio: u128;
+            max_total_e_risk: u128;
+        }
+
+        fn apply(self, ev: &EnergyEvent) -> Ledger {
+            let mut ledger = self;
+            // 1) fetch or initialize EnergyState
+            let mut st = ledger.states.get(ev.agent_id).cloned().unwrap_or(EnergyState {
+                auet: 0,
+                csp: 0,
+                e_compute: 0,
+                e_bio: 0,
+                e_risk: 0,
+                fast: 0,
+                slow: 0,
+                safety_budget: 0,
+            });
+
+            // 2) AdminAdjust constraints
+            if matches!(ev.reason, EnergyReason::AdminAdjust) {
+                assert!(ev.delta_auet >= 0 && ev.delta_csp >= 0);
+            }
+
+            // 3) apply AU.ET/CSP deltas (non‑negative constraint)
+            st.auet = (st.auet as i128 + ev.delta_auet).max(0) as u128;
+            st.csp = (st.csp as i128 + ev.delta_csp).max(0) as u128;
+
+            // 4) apply vector deltas (E_a)
+            st.e_compute = (st.e_compute as i128 + ev.vector.delta_e_compute).max(0) as u128;
+            st.e_bio = (st.e_bio as i128 + ev.vector.delta_e_bio).max(0) as u128;
+            st.e_risk = (st.e_risk as i128 + ev.vector.delta_e_risk).max(0) as u128;
+
+            // 5) apply dual‑pool deltas
+            st.fast = (st.fast as i128 + ev.dual.delta_fast).max(0) as u128;
+            st.slow = (st.slow as i128 + ev.dual.delta_slow).max(0) as u128;
+
+            // 6) apply safety budget delta
+            st.safety_budget = (st.safety_budget as i64 + ev.safety.delta_safety_budget)
+                .max(0) as u64;
+
+            ledger.states.insert(ev.agent_id.clone(), st);
+
+            // 7) global supply bounds check
+            ledger.enforce_supply_bounds();
+
+            // 8) update hashes (implement hash_event and hash_epoch in Rust)
+            ledger.last_seq = ev.seq;
+            ledger.last_event_hash = hash_event(ev);
+            ledger.epoch_hash = hash_epoch(&ledger);
+
+            ledger
+        }
+
+        fn enforce_supply_bounds(self) {
+            // aggregate over states and assert axis‑wise bounds
+        }
+    }
+
+    module "aln-ledger::io" {
+        use crate::aln_ledger::state::Ledger;
+        use crate::aln_ledger::events::EventRecord;
+
+        fn write_event_jsonl(path: &str, rec: &EventRecord) {
+            // append single JSON line to logs/ledger.jsonl
+        }
+
+        fn write_snapshot(path: &str, ledger: &Ledger) {
+            // serialize full ledger (states, last_seq, hashes, bounds)
+        }
+
+        fn read_snapshot(path: &str) -> Ledger {
+            // deserialize snapshot JSON
+        }
+
+        fn replay_log(path: &str, ledger: &mut Ledger) {
+            // for each line: parse EventRecord, call ledger.apply(&rec.event)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Cryptographic signing and verification (feature = "signing")
+    // ------------------------------------------------------------------
+    module "aln-ledger::signing" {
+        feature "signing";
+        dep "ed25519-dalek";
+
+        fn sign_event(ev: &EnergyEvent, sk: &SecretKey) -> EventRecord {
+            let h = hash_event(ev);
+            let sig = sk.sign(h.as_bytes());
+            EventRecord {
+                event: ev.clone(),
+                event_hash: h,
+                signature: Some(hex::encode(sig.to_bytes())),
+                signer_id: Some("admin-or-node-id".to_string()),
+            }
+        }
+
+        fn verify_event(rec: &EventRecord, pk: &PublicKey) -> bool {
+            if let Some(sig_hex) = &rec.signature {
+                let sig_bytes = match hex::decode(sig_hex) {
+                    Ok(b) => b,
+                    Err(_) => return false,
+                };
+                let sig = Signature::from_bytes(&sig_bytes).ok()?;
+                pk.verify(rec.event_hash.as_bytes(), &sig).is_ok()
+            } else {
+                false
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 7. CLI wiring (recovery, apply, admin audit)
+    // ------------------------------------------------------------------
+    module "aln-cli::commands" {
+        fn ledger_recover(snapshot: &str, log: &str) {
+            let mut ledger = read_snapshot(snapshot);
+            replay_log(log, &mut ledger);
+            println!("{}", ledger.epoch_hash);
+        }
+
+        fn ledger_apply(file: &str, verify_key: Option<&str>, sign_key: Option<&str>) {
+            // load events.json, optionally verify, optionally sign, apply via Ledger
+        }
+
+        fn ledger_audit_admin(log: &str) {
+            // scan JSONL log for AdminAdjust and print table: seq, agent, deltas, signer
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 8. Property‑based tests and CI hooks
+    // ------------------------------------------------------------------
+    module "tests::properties" {
+        // proptest: map_to_energy monotone in balance
+        // proptest: CSP cost monotone in level
+        // proptest: no axis < 0 after arbitrary valid event sequences
+    }
+
+    module "ci::workflow" {
+        step "cargo test --all";
+        step "regen BLUEPRINT.json";
+        step "sha256(BLUEPRINT.json) == BLUEPRINT_HASH";
+        on_fail "block merge; treat as design‑change gate";
+    }
+
+    // ------------------------------------------------------------------
+    // 9. Engine integration for Unreal / Unity / Godot
+    // ------------------------------------------------------------------
+    module "engine-bridges" {
+        // Unreal: C++ shim exposing FAgentEnergyState mirroring EnergyState
+        // Unity: C# struct AgentEnergyState + P/Invoke to Rust ledger DLL
+        // Godot: GDExtension binding for get_energy(agent_id) / apply_event(...)
+        //
+        // Each tick:
+        //  - sample BCI / XR telemetry
+        //  - compute drain_fast, drain_slow, safety_cost
+        //  - call DualEnergy::step and SafetyBudget::can_use
+        //  - emit EnergyEvent with provenance when external credits are used
+        //  - write_event_jsonl + periodic write_snapshot
+    }
+}

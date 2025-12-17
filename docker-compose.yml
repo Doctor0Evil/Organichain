@@ -1,0 +1,137 @@
+# Infra Platform - Docker Compose for Development
+# Full stack: API, PostgreSQL, Redis, Blockchain node (Ganache)
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: infra-postgres
+    environment:
+      POSTGRES_USER: infra
+      POSTGRES_PASSWORD: infra_dev_password
+      POSTGRES_DB: infra_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infra"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - infra-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: infra-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - infra-network
+
+  # Ganache (Local Ethereum Blockchain)
+  ganache:
+    image: trufflesuite/ganache:latest
+    container_name: infra-ganache
+    command: >
+      --mnemonic "test test test test test test test test test test test junk"
+      --accounts 10
+      --defaultBalanceEther 1000
+      --gasLimit 10000000
+    ports:
+      - "8545:8545"
+    networks:
+      - infra-network
+
+  # Infra API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: infra-api
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql://infra:infra_dev_password@postgres:5432/infra_db
+      - REDIS_URL=redis://redis:6379/0
+      - BLOCKCHAIN_ENABLED=true
+      - BLOCKCHAIN_RPC_URL=http://ganache:8545
+      - AUDIT_LEVEL=FULL
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./core:/app/core
+      - ./modules:/app/modules
+      - ./api:/app/api
+      - ./policy:/app/policy
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ganache:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - infra-network
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: infra-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - infra-network
+
+  # Grafana (Visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: infra-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - infra-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  infra-network:
+    driver: bridge

@@ -1,0 +1,15 @@
+[multi_party_compute]
+Processes input:
+    - party_list: array<string> (list of participants or entities)
+    - secret: binary (confidential data)
+Generates output:
+    - recombined_secret: binary (reassembled secure output)
+Implements protocol (computation mechanism):
+    - Performs SMC (secure multi-party computation): Shamir Secret Sharing (threshold scheme for secret distribution)
+    - Authenticates via multi-party certificate attestation (verification process)
+Sets dest-path: /infra/mp_compute/sessions/${datetime}/
+Enforces logging:
+    - Ensures compliance with Safe Harbor (data protection principles), EU SCC (standard contractual clauses)
+    - Stores logs at: /audit/mp_compute/sessions/${datetime}/
+Manages retention_policy: auto-destroys after use, policy-governed expiration
+Enforces security_policy: multi-user access logging, crypto split verification

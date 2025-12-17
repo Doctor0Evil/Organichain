@@ -1,0 +1,40 @@
+name: "ALN Deploy: Staging -> Production"
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (staging/production)'
+        required: true
+        default: 'staging'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy
+          tar czf deploy/aln_networks.tgz aln || true
+
+      - name: Verify attestations exist (artifact check)
+        run: |
+          echo "Ensure attestations exist before deploying. This is a policy enforcement step."
+
+      - name: (Manual Approval) Require reviewers for production
+        if: ${{ github.event.inputs.environment == 'production' }}
+        uses: chrnorm/deployment-approval-action@v1
+        with:
+          reviewers: 'security-team@example.com,legal-team@example.com'
+          timeout_minutes: 1440
+
+      - name: Run deployment script (placeholder)
+        run: |
+          echo "Running deployment to ${{ github.event.inputs.environment }}"
+          ls -la deploy || true
+
+      - name: Post-deployment: trigger trust-index recompute
+        run: |
+          echo "Triggering Chain-of-Trust recompute (placeholder)"

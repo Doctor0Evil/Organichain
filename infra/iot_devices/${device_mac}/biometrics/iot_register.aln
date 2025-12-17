@@ -1,0 +1,15 @@
+[iot_register]
+Processes input:
+    - biometrics: object (ISO/IEC 30107 template for biometric data)
+    - device_mac: string (media access control address or hardware identifier)
+Generates output:
+    - blockchain_id: string (SHA-3 hash, proof-of-authority/proof-of-stake transaction reference)
+Implements protocol (authentication mechanism):
+    - Authenticates via SHA-3 (secure hash algorithm 3), biometric/device challenge-response
+    - Integrates blockchain: PoA/PoS (proof-of-authority or proof-of-stake), eIDAS compliant (electronic identification, authentication and trust services)
+Sets dest-path: /infra/iot_devices/${device_mac}/biometrics/
+Enforces logging:
+    - Ensures compliance with eIDAS, NIST SP 800-63A (national institute of standards and technology digital identity guidelines)
+    - Stores logs at: /audit/iot_devices/${device_mac}/
+Manages lifecycle: provisions devices, rotates keys, revokes access
+Enforces security_policy: zero-trust model, biometric/blockchain binding, destruction endpoint

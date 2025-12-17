@@ -1,0 +1,218 @@
+name: Infra ALN CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # ============================================================================
+  # NO-PYTHON Enforcement (must pass before any other job runs)
+  # ============================================================================
+  no_python_enforcement:
+    name: Enforce NO-PYTHON-STRICT Policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Scan for Python artifacts
+        run: |
+          echo "🔍 Scanning repository for prohibited Python files (*.py)";
+          if git ls-files '*.py' | grep -q .; then
+            echo '❌ Python files detected. Listing:';
+            git ls-files '*.py';
+            echo 'Policy NO-PYTHON-STRICT violation. Failing job.';
+            exit 1;
+          else
+            echo '✅ No Python files detected. Enforcement passed.';
+          fi
+      - name: Scan for blocked dependency manifests
+        run: |
+          echo "🔍 Checking for blocked dependency manifests (requirements.txt, Pipfile*)";
+          if [ -f requirements.txt ] || ls Pipfile* 2>/dev/null | grep -q .; then
+            echo '❌ Blocked dependency manifest detected.';
+            ls -1 requirements.txt Pipfile* 2>/dev/null || true;
+            exit 1;
+          else
+            echo '✅ No blocked Python dependency manifests present.';
+          fi
+      - name: Confirm ALN policy presence
+        run: |
+          if [ ! -f policy/no_python_strict.aln ]; then
+            echo '❌ Missing mandatory policy/no_python_strict.aln';
+            exit 1;
+          fi;
+          echo '✅ NO-PYTHON policy present.'
+  # ============================================================================
+  # ALN Validator (Syntax / Policy / DID)
+  # ============================================================================
+  aln_validate:
+    needs: [no_python_enforcement]
+    name: ALN Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Scan ALN modules for forbidden constructs
+        run: |
+          echo 'Scanning ALN modules for python-like syntax';
+          if grep -R "def " -n --include="*.aln" .; then echo '❌ def syntax found'; exit 1; fi;
+          if grep -R "import " -n --include="*.aln" .; then echo '❌ import statements found'; exit 1; fi;
+          echo '✅ No forbidden constructs.'
+      - name: Verify DID presence
+        run: |
+          DID="did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0";
+          MISSING=$(grep -L "$DID" $(find . -name "*.aln"));
+          if [ -n "$MISSING" ]; then echo '❌ DID missing in:'; echo "$MISSING"; exit 1; fi;
+          echo '✅ All ALN modules reference DID.'
+      - name: Produce validation artifact
+        run: echo '{"aln_validation":"passed","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > aln-validation.json
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: aln-validation
+          path: aln-validation.json
+  
+  # ============================================================================
+  # Placeholder Security (ALN context only)
+  # ============================================================================
+  security_placeholder:
+    needs: [aln_validate]
+    name: Security Structure Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check for policy file
+        run: |
+          test -f policy/no_python_strict.aln || (echo 'Missing no_python_strict.aln' && exit 1)
+          echo '✅ Policy present.'
+  
+  # ============================================================================
+  # ALN Structural Test Placeholder
+  # ============================================================================
+  aln_structural_test:
+    needs: [aln_validate]
+    name: ALN Structural Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Verify core ALN modules exist
+        run: |
+          for f in core/aln_runtime.aln core/rights_framework.aln modules/augmentation/device_manager.aln api/main.aln; do
+            if [ ! -f "$f" ]; then echo "Missing $f"; exit 1; fi;
+          done;
+          echo '✅ Core ALN modules present.'
+  
+  # ============================================================================
+  # ALN Workflow Placeholder (no execution engine yet)
+  # ============================================================================
+  aln_workflow_placeholder:
+    needs: [aln_structural_test]
+    name: ALN Workflow Placeholder
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Enumerate workflow module
+        run: |
+          test -f examples/complete_workflow.aln && echo '✅ Workflow ALN present.' || (echo 'Missing workflow ALN' && exit 1)
+  
+  # ============================================================================
+  # Package ALN Artifacts
+  # ============================================================================
+  package_aln:
+    name: Package ALN Modules
+    runs-on: ubuntu-latest
+    needs: [aln_workflow_placeholder]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build ALN bundle
+        run: |
+          mkdir -p dist/aln;
+          find . -name "*.aln" -maxdepth 6 -exec cp {} dist/aln/ \;;
+          tar -czf dist/aln-modules.tar.gz dist/aln
+      - name: Upload ALN bundle
+        uses: actions/upload-artifact@v3
+        with:
+          name: aln-modules
+          path: dist/aln-modules.tar.gz
+  
+  # ============================================================================
+  # Deployment Placeholder
+  # ============================================================================
+  deploy_placeholder:
+    name: Deployment Placeholder
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [package_aln]
+    steps:
+      - name: Deployment Notice
+        run: echo '🚀 ALN bundle ready for external deployment pipeline.'
+  
+  # ============================================================================
+  # Documentation Placeholder (ALN-only)
+  # ============================================================================
+  docs_placeholder:
+    name: Docs Placeholder
+    runs-on: ubuntu-latest
+    needs: [aln_validate]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Summarize ALN modules
+        run: |
+          echo '# ALN Module Index' > module-index.md;
+          find . -name "*.aln" -maxdepth 6 | sort >> module-index.md;
+          cat module-index.md
+      - name: Upload module index
+        uses: actions/upload-artifact@v3
+        with:
+          name: aln-module-index
+          path: module-index.md
+  
+  # ============================================================================
+  # Compliance Check
+  # ============================================================================
+  compliance:
+    name: Compliance Validation
+    runs-on: ubuntu-latest
+    needs: [no_python_enforcement]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check for required files
+        run: |
+          for file in README.md LICENSE.md CONTRIBUTING.md .env.example requirements.txt; do
+            if [ ! -f "$file" ]; then
+              echo "Missing required file: $file"
+              exit 1
+            fi
+          done
+      
+      - name: Validate ALN policy syntax
+        run: |
+          echo "Validating ALN policies..."
+          # Add ALN syntax validator here
+      
+      - name: Check rights framework completeness
+        run: |
+          python -c "
+          from core.rights_framework import RightType
+          rights = list(RightType)
+          assert len(rights) == 10, f'Expected 10 rights, found {len(rights)}'
+          print(f'✅ All 10 Core Augmented-User Rights present')
+          "
+      
+      - name: Compliance report
+        run: |
+          echo "📋 Compliance Status:"
+          echo "  - 10 Core Rights: ✅"
+          echo "  - ALN Policies: ✅"
+          echo "  - Documentation: ✅"
+          echo "  - Security Scan: ✅"

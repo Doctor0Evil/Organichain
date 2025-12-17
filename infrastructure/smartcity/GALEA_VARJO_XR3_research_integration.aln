@@ -1,0 +1,20 @@
+// File: /infrastructure/smartcity/GALEA_VARJO_XR3_research_integration.aln
+# HEX: 2F3AEC4865D92714AC3479FD821037B5
+RESEARCH_DEVICE "GALEA_VARJO_XR3" {
+  DESCRIPTION: "Multimodal neurotech headset. Integrated dry-EEG, eye/heart/skin/muscle sensors. High-fidelity mixed-reality for neuroscience, BCI, and AU research."
+  COMPLIANCE: ["EU-GDPR_ESRB-Privacy", "US-HIPAA", "ISO/IEC 27001", "NeuroRights Initiative"]
+  SENSORS: [
+    {TYPE: "EEG", CHANNELS: 10, ELECTRODES: ["F1","F2","C3","CZ","C4","P3","PZ","P4","O1","O2"], CONDUCTIVE: true},
+    {TYPE: "EyeTracking", FREQUENCY_HZ: 200},
+    {TYPE: "EMG", LOCATIONS: "facial muscles"},
+    {TYPE: "PPG", PARAMETERS: ["heart rate", "pulse"]},
+    {TYPE: "EDA", PARAMETERS: ["skin conductance"]}
+  ]
+  XR_FEATURES: {
+    DISPLAY: {RESOLUTION: "1920x1920 uOLED center, 2880x2720 LCD periphery", FOV: 115, PPD: 70},
+    VIDEO: {PASSTHROUGH: "12MP dual, 90Hz"},
+    LIDAR: {DEPTH_RANGE: "0.4–5m"}
+  }
+  DATA_MODES: ["Wireless 2.4/5GHz", "microSD Export"],
+  APPLICATIONS: ["Cognitive workload", "Affective computing", "Neuroadaptive UX", "BCI protocols", "Smart-city AU node deployment", "Industrial safety", "Next-gen e-sports"]
+}

@@ -1,0 +1,13 @@
+// Destination: [translate:zenith-labs/policies/antigreedpolicy.aln]
+TITLE [translate:Autonomous Anti-Greed Policy (AI-only enforcement)]
+policy [translate:antigreedpolicy] {
+    maxprofit: [translate:0.20]
+    maxcomplaints: [translate:5]
+    trustthreshold: [translate:50]
+    autoblockongreed: [translate:TRUE]
+    trackaudittrails: [translate:TRUE]
+    autosuspendonpattern: [translate:TRUE]
+    escalateonrepeatoffense: [translate:TRUE]
+    blockonlowtrust: [translate:TRUE]
+}
+HEX: [translate:C7E9218445DDAE3F04A5]

@@ -1,0 +1,39 @@
+{
+  "blueprint": "NEUROMORPHIC_SOFT_BIO_STACK_BLUEPRINT",
+  "version": "1.0.0",
+  "rust_types": [
+    "FixedPoint32",
+    "AuEtBudget",
+    "AuEtLedger",
+    "BiocompatibilityIndex",
+    "DoseLimits",
+    "NodeClassProfile",
+    "VirtualNode",
+    "LifParams",
+    "VirtualNodeMetrics",
+    "OtaManifest",
+    "DotWindow",
+    "NodeMetricsExt",
+    "SimBackendNode",
+    "SafetyProfile",
+    "OtaEvent",
+    "UpdatePlanEntry",
+    "UpdateResult",
+    "OtaEngine"
+  ],
+  "safety_inequalities": {
+    "charge_phase": "|1e6 * Q_{k+1} / A_cm2| <= sigma_max",
+    "sar": "SAR_k <= 0.8 * SAR_band",
+    "auet_non_minting": "AU.ET_total, AU.ET_daily, AU.ET_session monotone non-decreasing with upper caps"
+  },
+  "node_class_table": "inline copy of NODE_CLASS_TABLE with numeric values",
+  "ota_state_machine": {
+    "states": ["Planned", "SkippedSafety", "SkippedWindow", "Applied", "RolledBack", "Failed"],
+    "transitions": [
+      "Planned -> Applied",
+      "Planned -> SkippedSafety",
+      "Planned -> SkippedWindow",
+      "Applied -> RolledBack"
+    ]
+  }
+}

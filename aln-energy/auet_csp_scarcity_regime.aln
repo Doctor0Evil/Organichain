@@ -1,0 +1,288 @@
+// ======================================================================
+// AU.ET / CSP SCARCITY + FLOW REGIME
+// Extreme compression, hard caps, narrow earning channels, daily gates
+// Wire directly into existing Rust ledger and energy engine
+// ======================================================================
+
+regime AUET_CSP_SCARCITY_V1 {
+    version "1.0.0";
+    language "rust";
+
+    // ------------------------------------------------------------------
+    // 1. Compression constants and global caps
+    // ------------------------------------------------------------------
+    module "aln-energy::compression" {
+        const C_E: f64 = 1e-12;       // AU.ET compression
+        const C_S: f64 = 5e-13;       // CSP compression
+        const D_ALN: u32 = 9;         // internal decimals (example)
+
+        const MAX_TOTAL_AUET: u128 = 1_000_000_000_000; // 10^6 AU.ET * 10^6 decimals
+        const MAX_TOTAL_CSP:  u128 = 1_000_000_000;     // 10^3 CSP * 10^6 decimals
+
+        fn map_source_to_internal(
+            balance_min_units: u128,
+            d_src: u32
+        ) -> (u128, u128) {
+            // A_src = B / 10^d_src
+            let b_f = balance_min_units as f64;
+            let a_src = b_f / 10f64.powi(d_src as i32);
+
+            // A_E, A_S
+            let a_e = a_src * C_E;
+            let a_s = a_src * C_S;
+
+            let scale = 10f64.powi(D_ALN as i32);
+
+            let b_e = to_u128_floor(a_e * scale);
+            let b_s = to_u128_floor(a_s * scale);
+
+            (b_e, b_s)
+        }
+    }
+
+    module "aln-ledger::supply" {
+        struct GlobalSupply {
+            total_auet: u128;
+            total_csp: u128;
+            remaining_initial_auet: u128;
+            remaining_initial_csp: u128;
+            remaining_research_pool_auet: u128;
+            remaining_research_pool_csp: u128;
+        }
+
+        invariant SupplyBounds {
+            assert(total_auet <= MAX_TOTAL_AUET);
+            assert(total_csp  <= MAX_TOTAL_CSP);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Earning channels (mapping, research, uptime)
+    // ------------------------------------------------------------------
+    module "aln-ledger::reasons" {
+        enum EnergyReason {
+            Transfer,           // highly restricted
+            ExternalMapping,    // one‑off legacy migration
+            ResearchReward,     // cryptographically attested work
+            UptimeReward,       // long‑term compliant uptime
+            AdminAdjust,        // rare, signed, auditable
+        }
+    }
+
+    module "aln-ledger::mint_paths" {
+        use crate::aln_ledger::reasons::EnergyReason;
+        use crate::aln_ledger::supply::GlobalSupply;
+
+        fn apply_external_mapping(ev: &EnergyEvent, supply: &mut GlobalSupply) {
+            assert!(matches!(ev.reason, EnergyReason::ExternalMapping));
+            assert!(ev.delta_auet >= 0 && ev.delta_csp >= 0);
+            let delta_auet = ev.delta_auet as u128;
+            let delta_csp  = ev.delta_csp  as u128;
+
+            assert!(supply.remaining_initial_auet >= delta_auet);
+            assert!(supply.remaining_initial_csp  >= delta_csp);
+
+            let new_total_auet = supply.total_auet + delta_auet;
+            let new_total_csp  = supply.total_csp  + delta_csp;
+            assert!(new_total_auet <= MAX_TOTAL_AUET);
+            assert!(new_total_csp  <= MAX_TOTAL_CSP);
+
+            supply.total_auet = new_total_auet;
+            supply.total_csp  = new_total_csp;
+            supply.remaining_initial_auet -= delta_auet;
+            supply.remaining_initial_csp  -= delta_csp;
+        }
+
+        fn apply_research_reward(ev: &EnergyEvent, supply: &mut GlobalSupply) {
+            assert!(matches!(ev.reason, EnergyReason::ResearchReward));
+            assert!(ev.delta_auet >= 0 && ev.delta_csp >= 0);
+            assert!(ev.research_proof_hash.is_some());   // cryptographic evidence
+            let d_auet = ev.delta_auet as u128;
+            let d_csp  = ev.delta_csp  as u128;
+
+            assert!(supply.remaining_research_pool_auet >= d_auet);
+            assert!(supply.remaining_research_pool_csp  >= d_csp);
+
+            supply.total_auet += d_auet;
+            supply.total_csp  += d_csp;
+            supply.remaining_research_pool_auet -= d_auet;
+            supply.remaining_research_pool_csp  -= d_csp;
+        }
+
+        fn apply_uptime_reward(ev: &EnergyEvent, supply: &mut GlobalSupply) {
+            assert!(matches!(ev.reason, EnergyReason::UptimeReward));
+            assert!(ev.delta_csp == 0);
+            // AU.ET trickle: 10^-6 AU.ET per 24h, pre‑scaled to integer
+            let d_auet = ev.delta_auet as u128;
+            assert!(d_auet > 0);
+            let new_total_auet = supply.total_auet + d_auet;
+            assert!(new_total_auet <= MAX_TOTAL_AUET);
+            supply.total_auet = new_total_auet;
+            // no CSP from uptime
+        }
+
+        fn apply_admin_adjust(ev: &EnergyEvent, supply: &mut GlobalSupply) {
+            assert!(matches!(ev.reason, EnergyReason::AdminAdjust));
+            assert!(ev.delta_auet >= 0 && ev.delta_csp >= 0);
+            // must also be checked against dedicated admin pool and signer_id
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Transfer restrictions (no open P2P market)
+    // ------------------------------------------------------------------
+    module "aln-ledger::transfers" {
+        fn can_transfer_auet(sender: &AgentState, receiver: &AgentState, amount: u128) -> bool {
+            // Example policy: either disallow, or require governance approval flag
+            if !receiver.is_governance_approved {
+                return false;
+            }
+            // anti‑whale: receiver cannot exceed some per‑agent cap
+            let new_balance = receiver.auet.saturating_add(amount);
+            new_balance <= receiver.per_agent_auet_cap
+        }
+
+        fn can_transfer_csp(_sender: &AgentState, _receiver: &AgentState, _amount: u128) -> bool {
+            // simplest: CSP is non‑transferable
+            false
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Daily energy caps and CSP upgrade costs
+    // ------------------------------------------------------------------
+    module "aln-energy::daily_caps" {
+        const E_BASE: u64 = 50; // baseline daily energy
+        const ALPHA:  f64 = 2.0;
+
+        fn daily_cap(auet_internal: u128) -> u64 {
+            // auet_internal is B_E in integer units; convert to AU.ET float
+            let scale = 10f64.powi(D_ALN as i32);
+            let a_e = (auet_internal as f64) / scale;
+            let cap_f = (E_BASE as f64) + ALPHA * a_e;
+            cap_f.floor().max(0.0) as u64
+        }
+
+        struct DailyUsage {
+            used_today: u64;
+            last_epoch: u64;
+        }
+
+        fn can_spend(
+            auet_internal: u128,
+            usage: &DailyUsage,
+            epoch: u64,
+            spend: u64
+        ) -> bool {
+            let cap = daily_cap(auet_internal);
+            let used = if usage.last_epoch == epoch { usage.used_today } else { 0 };
+            used + spend <= cap
+        }
+
+        fn record_spend(mut usage: DailyUsage, epoch: u64, spend: u64) -> DailyUsage {
+            if usage.last_epoch != epoch {
+                usage.used_today = 0;
+                usage.last_epoch = epoch;
+            }
+            usage.used_today = usage.used_today.saturating_add(spend);
+            usage
+        }
+    }
+
+    module "aln-energy::csp_upgrades" {
+        const G_MIN: f64 = 1.8;
+        const G_MAX: f64 = 2.0;
+        const C0:   f64 = 1.0;
+
+        enum Rarity {
+            Common = 1,
+            Rare   = 2,
+            Epic   = 3,
+            Mythic = 4,
+        }
+
+        fn csp_cost_int(level: u32, rarity: Rarity, g: f64) -> u128 {
+            let g_clamped = g.clamp(G_MIN, G_MAX);
+            let r = rarity as u32;
+            let exponent = (level - 1) as i32;
+            let cost = C0 * (r as f64) * g_clamped.powi(exponent);
+            let scale = 10f64.powi(D_ALN as i32);
+            to_u128_floor(cost * scale)
+        }
+
+        property MonotoneUpgradeCost {
+            // level+1 always costs >= level for fixed g, rarity
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Hard enforcement inside Ledger::apply and ability engine
+    // ------------------------------------------------------------------
+    module "aln-ledger::apply" {
+        use crate::aln_ledger::reasons::EnergyReason;
+        use crate::aln_ledger::supply::GlobalSupply;
+        use crate::aln_energy::daily_caps::{can_spend, record_spend};
+        use crate::aln_energy::safety_envelope::SafetyBudget;
+
+        fn apply(mut ledger: Ledger, ev: &EnergyEvent) -> Ledger {
+            match ev.reason {
+                EnergyReason::ExternalMapping => {
+                    apply_external_mapping(ev, &mut ledger.global_supply);
+                }
+                EnergyReason::ResearchReward => {
+                    apply_research_reward(ev, &mut ledger.global_supply);
+                }
+                EnergyReason::UptimeReward => {
+                    apply_uptime_reward(ev, &mut ledger.global_supply);
+                }
+                EnergyReason::AdminAdjust => {
+                    apply_admin_adjust(ev, &mut ledger.global_supply);
+                }
+                EnergyReason::Transfer => {
+                    // no new supply; only reallocation subject to can_transfer_* rules
+                }
+            }
+
+            // existing per‑agent balance updates happen here (non‑negative, bounded)
+
+            ledger.enforce_supply_bounds();
+            ledger
+        }
+    }
+
+    module "ability_engine::checks" {
+        use crate::aln_energy::daily_caps::{can_spend, record_spend};
+        use crate::aln_energy::safety_envelope::SafetyBudget;
+
+        fn can_execute_ability(
+            agent_state: &AgentEnergyState,
+            daily_usage: &DailyUsage,
+            safety: &SafetyBudget,
+            epoch: u64,
+            energy_cost: u64,
+            safety_cost: u64
+        ) -> bool {
+            if !can_spend(agent_state.auet, daily_usage, epoch, energy_cost) {
+                return false;
+            }
+            if safety_cost > 0 && !safety.can_use(safety_cost) {
+                return false;
+            }
+            true
+        }
+
+        fn record_ability_use(
+            mut daily_usage: DailyUsage,
+            mut safety: SafetyBudget,
+            epoch: u64,
+            energy_cost: u64,
+            safety_cost: u64
+        ) -> (DailyUsage, SafetyBudget) {
+            daily_usage = record_spend(daily_usage, epoch, energy_cost);
+            if safety_cost > 0 {
+                safety = safety.record_use(safety_cost);
+            }
+            (daily_usage, safety)
+        }
+    }
+}

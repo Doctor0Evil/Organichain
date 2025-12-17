@@ -1,0 +1,3 @@
+# /aln/functions/aln_challenges_generate.aln
+function_name,input_params,output_type,protocol_stack,compliance_check,energy_ledger_integration,log_persistence
+generate_epoch_challenges,"epoch:u64,policy_hash:string,tsn_jitter_us:f64,avg_sar_wkg:f64,epoch_risk:f64","ChallengeBatch:struct{epoch:u64,policy_hash:string,challenges:list<ChallengeSpecV1>}","LocalHost+TLS1.3","GDPR+NIST-CSF+EU-AI-Act-2024","CEM-Ledger-V4(AU.ET,CSP,vector_axes)","Hyperledger-full-audit+DID-Chain"

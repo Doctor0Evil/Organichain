@@ -1,0 +1,20 @@
+aln dataset QPU.Nanoswarm.Matrix.v1
+purpose "Hex-anchored traceability between nanoswarm nodes, neuromorphic envelopes, and BioAugClinical governance."
+
+const MATRIX_HEX 0x42494F415547434C494E4943414C2D434C415353432D525553542D5741534D2D414C4E2D4353454D534146455F5441494C4F5245445F54524143454142494C4954595F4D415452495845532D5A45524F54525553545F5A45524F5452555354u512
+
+block QPU.TraceabilityBlock
+  id u64
+  node_id hash64
+  bioaug_featureid u64
+  nano_envelope_ref u64
+  matrix_anchor u512
+end
+
+instance QPU.TraceabilityBlock1
+  id 0x0000000000000001u64,
+  node_id 0xFFFFFFFFFFFF0001u64,
+  bioaug_featureid 1u64,
+  nano_envelope_ref 1u64,
+  matrix_anchor MATRIX_HEX
+end

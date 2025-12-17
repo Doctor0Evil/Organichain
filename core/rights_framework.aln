@@ -1,0 +1,33 @@
+MODULE rights-framework-replacement
+  manifest:
+    author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+    original_source: core/rights_framework.py
+    replaced_on: 2025-11-25T00:00:00Z
+    policy: NO-PYTHON-STRICT
+  RIGHTS:
+    list: [EXISTENCE,PRIVACY,CONSENT,SELF_OWNERSHIP,META_COGNITIVE_INTEGRITY,CROSS_LAYER_BOUNDARIES,AUDITABILITY,LEGAL_TRIGGERS,EXPLAINABILITY,ROLLBACK]
+  REGISTRY:
+    persistent: TRUE
+    blockchain_anchor: TRUE
+  FUNCTIONS:
+    function GrantAll(user) {
+      for right in RIGHTS.list {
+        Grant(user.id, right)
+      }
+      AuditLog.record("GRANT_ALL", user.id)
+      return TRUE
+    }
+    function Grant(user_id, right) {
+      # create grant object
+      AuditLog.record("GRANT", right, user_id)
+    }
+    function RecordViolation(user_id, right, severity, detail) {
+      AuditLog.record("VIOLATION", right, severity, user_id, detail)
+      if (severity == CRITICAL) { TriggerEmergency(user_id, right) }
+    }
+    function GenerateReport(user_id) {
+      # aggregate rights status
+      AuditLog.record("REPORT_GENERATED", user_id)
+      return REPORT_OBJECT(user_id)
+    }
+END rights-framework-replacement

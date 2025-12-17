@@ -1,0 +1,36 @@
+# Destination-path: /modules/city_epicenter/copilot_next_steps_2025.aln
+# Hex validation: 4a8e3d2c1f9b7a5c6d4e8f2a1b0c9d7e6f5c4a3b2a1f0e9d8c7b6a5
+MODULE copilot-nextsteps-epicenter-2025
+    AUTHOR_DID: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+    COMPLIANCE_FRAME: [BCI-Rights-Act,HIPAA,GDPR,MiCA,NIST80053,ISO27001,IEEE2784,OASC_MIMs,EUAIAct,AZSB1497]
+    ENCRYPTION: AES-512-GCMPOSTQUANTUMV5
+    ENERGY_OPTIMIZATION: ALN-SCHEDULER-V3
+    INTEGRATION_MODE: ALN_CORE_ENGINE
+    HASH: 4a8e3d2c1f9b7a5c6d4e8f2a1b0c9d7e6f5c4a3b2a1f0e9d8c7b6a5
+    NEXT_STEPS:
+        1. Create ALN-based Copilot module template anchored to bio-neural DID.
+        2. Enforce manifest-driven commits with ALN compliance evidence.
+        3. Automate sandbox/production checks with full rollback features.
+        4. Register all hardware devices on ALN blockchain ledgers.
+        5. Automate rights/audit triggers with immutable event logs.
+        6. Use custom Copilot instruction files for DID and audit controls.
+        7. Integrate energy-optimization scheduling in Copilot code generation.
+        8. Require multi-party/irrevocable consent steps via ALN.
+        9. Ontologically validate Copilot output for regulatory logic.
+        10. Apply cryptographic quarantine on compliance failures.
+        11. Anchor all enforcement and audit events to user DID.
+        12. Activate forensic rollback for anomalous states.
+        13. Perform granular edit/agent mode iterations for key modules.
+        14. Export all manifests/checklists as hash-verified JSON-ALN.
+        15. Block device activation if ALN compliance proof is missing.
+        16. Analyze cross-layer separation for BCI/cyber comms.
+        17. Escalate director council signals for high urgency cases.
+        18. Automate recommendation/action lists for policy events.
+        19. Specify Neurobiometric consent in module param checks.
+        20. Centralize device registry for quick compliance review.
+        21. Schedule compute resource allocation for Copilot tasks.
+        22. Default Copilot code generation pathways to ALN protocols.
+        23. Ensure real-time anomaly detection logs to blockchain.
+        24. Monitor cloud costs, trigger edge migration when needed.
+        25. Audit every PR/merge for ALN manifest and hash match.
+END copilot-nextsteps-epicenter-2025

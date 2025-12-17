@@ -1,0 +1,147 @@
+"""
+Example ALN Policy: Anti-Greed Policy for Smart City Operations
+Demonstrates energy-efficient rule-based governance
+"""
+
+# ALN Policy Definition
+policy AntiGreedPolicy {
+  # Economic constraints
+  max_profit_margin: 0.20  # 20% maximum
+  max_complaints_threshold: 5
+  min_service_quality: 0.85  # 85%
+  
+  # Enforcement flags
+  auto_block_on_greed: TRUE
+  track_audit_trails: TRUE
+  require_transparency: TRUE
+  blockchain_anchor: TRUE
+  
+  # Escalation
+  escalate_to_committee: TRUE
+  notify_public: TRUE
+}
+
+/**
+ * Evaluate entity for greed-based blocking
+ * 
+ * This function implements transparent, auditable decision-making
+ * for smart city vendor/service provider evaluation.
+ */
+function EvaluateEntity(entity) {
+  # Step 1: Check profit margin
+  if (entity.profitMargin > AntiGreedPolicy.max_profit_margin) {
+    AuditLog.record(
+      "EXCESSIVE_PROFIT_MARGIN",
+      entity.id,
+      entity.operator,
+      details={
+        'profit_margin': entity.profitMargin,
+        'max_allowed': AntiGreedPolicy.max_profit_margin
+      }
+    );
+    
+    if (AntiGreedPolicy.auto_block_on_greed) {
+      BlockchainRegistry.register(
+        entity.id,
+        "BLOCKED_EXCESSIVE_PROFIT",
+        timestamp(),
+        entity.profitMargin
+      );
+      
+      NotificationService.broadcast(
+        "Entity " + entity.id + " blocked for excessive profit margin",
+        priority="HIGH"
+      );
+      
+      return BLOCK;
+    }
+    
+    return ESCALATE;
+  }
+  
+  # Step 2: Check complaint history
+  if (entity.complaints > AntiGreedPolicy.max_complaints_threshold) {
+    AuditLog.record(
+      "EXCESSIVE_COMPLAINTS",
+      entity.id,
+      entity.operator,
+      details={
+        'complaint_count': entity.complaints,
+        'threshold': AntiGreedPolicy.max_complaints_threshold
+      }
+    );
+    
+    return BLOCK;
+  }
+  
+  # Step 3: Verify service quality
+  if (entity.serviceQuality < AntiGreedPolicy.min_service_quality) {
+    AuditLog.record(
+      "INSUFFICIENT_SERVICE_QUALITY",
+      entity.id,
+      entity.operator,
+      details={
+        'service_quality': entity.serviceQuality,
+        'required': AntiGreedPolicy.min_service_quality
+      }
+    );
+    
+    return BLOCK;
+  }
+  
+  # Step 4: Transparency verification
+  if (AntiGreedPolicy.require_transparency AND !entity.hasPublicRecords) {
+    AuditLog.record(
+      "TRANSPARENCY_FAILURE",
+      entity.id,
+      entity.operator
+    );
+    
+    return ESCALATE;
+  }
+  
+  # All checks passed
+  AuditLog.record(
+    "ENTITY_APPROVED",
+    entity.id,
+    entity.operator,
+    details={
+      'profit_margin': entity.profitMargin,
+      'complaints': entity.complaints,
+      'service_quality': entity.serviceQuality
+    }
+  );
+  
+  return APPROVE;
+}
+
+/**
+ * Periodic re-evaluation of all approved entities
+ * Ensures continuous compliance
+ */
+function PeriodicReview() {
+  approvedEntities = EntityRegistry.getAllApproved();
+  
+  for (entity in approvedEntities) {
+    result = EvaluateEntity(entity);
+    
+    if (result == BLOCK) {
+      EntityRegistry.updateStatus(entity.id, "BLOCKED");
+      
+      if (AntiGreedPolicy.notify_public) {
+        PublicNotificationService.announce(
+          "Entity " + entity.name + " has been blocked due to policy violations"
+        );
+      }
+    }
+    
+    if (result == ESCALATE AND AntiGreedPolicy.escalate_to_committee) {
+      EscalationService.notify(
+        "ethics_committee",
+        "ENTITY_REQUIRES_REVIEW",
+        entity.id,
+        entity.getViolationSummary()
+      );
+    }
+  }
+}

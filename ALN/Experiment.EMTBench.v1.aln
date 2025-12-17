@@ -1,0 +1,82 @@
+dataset Experiment.EMTBench.v1
+
+namespace AU.CyberCore
+
+import AU.BioAug.SecureBiomech.v1 as BioAug
+import AU.CyberCore.EnergyMassTissue.v1 as EMT
+
+type u64   uint64
+type f32   float32
+type hash64 u64
+type ts64  u64
+
+# Experimental EMT envelope samples (phantom tissue)
+
+record EMTBenchSample
+  sampleid            u64
+  envelopeid          u64
+  node_id             hash64
+  timestampms         ts64
+  measured_temp_c     f32      # DAQ temp sensor
+  baseline_temp_c     f32
+  measured_force_n    f32      # phantom load cell
+  supply_voltage_v    f32
+  supply_current_ma   f32
+end
+
+# Three concrete samples linked to AU.BioAug SecureBiomech features
+
+instance EMTBenchSample3
+  sampleid            1u64
+  envelopeid          2001u64
+  node_id             0xB4E2D7A1C9F0837Au64
+  timestampms         1761760005200u64
+  measured_temp_c     36.9f32
+  baseline_temp_c     36.6f32
+  measured_force_n    0.08f32
+  supply_voltage_v    3.30f32
+  supply_current_ma   13.5f32
+
+  sampleid            2u64
+  envelopeid          2002u64
+  node_id             0xA1B2C3D4E5F60789u64
+  timestampms         1761760005520u64
+  measured_temp_c     37.4f32
+  baseline_temp_c     36.7f32
+  measured_force_n    1.25f32
+  supply_voltage_v    5.00f32
+  supply_current_ma   82.0f32
+
+  sampleid            3u64
+  envelopeid          2003u64
+  node_id             0xF1F2F3F4F5F6F7F8u64
+  timestampms         1761760005850u64
+  measured_temp_c     36.5f32
+  baseline_temp_c     36.4f32
+  measured_force_n    0.00f32
+  supply_voltage_v    1.80f32
+  supply_current_ma   2.1f32
+end
+
+block ALN.SemanticBlock.EMTBenchSafety
+  id          0x0000_0000_0000_EB01u64
+  featureid   0u64
+  codelenbytes 224u32
+  codebytes utf8:
+    # Bench safety: ensure phantom temp rise <= EMT limit
+
+    function temp_rise_ok(measured f32, baseline f32,
+                          limit_delta f32) -> bool {
+      let delta = measured - baseline
+      if delta <= limit_delta + 0.05 then return true
+      return false
+    }
+
+    policy bench.temp_delta_within_emtlaw
+      require forall EMTBenchSample s, EMT.EMTEnvelope e:
+        s.envelopeid == e.envelopeid
+          => temp_rise_ok(s.measured_temp_c,
+                          s.baseline_temp_c,
+                          e.limit_temp_delta_c)
+    end
+end

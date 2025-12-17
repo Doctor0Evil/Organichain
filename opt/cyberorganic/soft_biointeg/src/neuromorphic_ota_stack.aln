@@ -1,0 +1,789 @@
+// neuromorphic_ota_stack.aln
+// Software-only biomechanical integration + neuromorphic OTA/DOT crate blueprint
+// Target: pure-software CyberOrganic/BioAug simulation layer, no real tissue/no devices. [web:1][web:2][web:3]
+
+aln_package NeuromorphicSoftBioStack v1.0.0 {
+    meta {
+        title        = "Software-only biomechanical integration + neuromorphic OTA scheduler"
+        owner_did    = "did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0"
+        language     = "rust+aln"
+        runtime      = "CyberOrganic/ALN Phase-I"
+        safety_class = "simulation-only-no-physical-actuation"
+        description  = "Implements virtual biomechanical nodes, neuromorphic kernels, safety envelopes, and an OTA/DOT crate for neuromorphic hardware, all parameterized by biophysics but enforced in software only."
+    }
+
+    // -----------------------------
+    // GLOBAL ENUMS AND TYPEDEFS
+    // -----------------------------
+
+    enum NodeClass {
+        SoftEcog,
+        PvdfRetinal,
+        HapticPlate,
+        RfusHelmet,
+        MicromoteKnn,
+        SimLoihi,
+        SimAkida,
+        SimFpga,
+    }
+
+    enum TissueProfile {
+        AdultTranscranial,
+        Ocular,
+        Pediatric,
+        Peripheral,
+    }
+
+    enum EnergyReason {
+        SpikeActivity,
+        StimulationPattern,
+        OtaUpgradeSpend,
+        OtaRollbackSpend,
+        SafetyMonitorOverhead,
+    }
+
+    enum UpdateStatus {
+        Planned,
+        SkippedSafety,
+        SkippedWindow,
+        Applied,
+        RolledBack,
+        Failed,
+    }
+
+    // -----------------------------
+    // FIXED-POINT LEDGER TYPES
+    // -----------------------------
+
+    struct FixedPoint32 {
+        // 16.16 fixed point
+        raw_u32: u32;
+    }
+
+    fn fx_from_f64(x: f64) -> FixedPoint32 {
+        let scaled: u64 = (x * 65536.0) as u64;
+        FixedPoint32 { raw_u32: (scaled & 0xFFFF_FFFF) as u32 }
+    }
+
+    fn fx_to_f64(x: FixedPoint32) -> f64 {
+        (x.raw_u32 as f64) / 65536.0
+    }
+
+    struct AuEtBudget {
+        daily_cap: FixedPoint32;   // AU.ET/day
+        session_cap: FixedPoint32; // AU.ET/session
+    }
+
+    struct AuEtLedger {
+        // monotonic burn-only ledger
+        total_burn: FixedPoint32;
+        daily_burn: FixedPoint32;
+        session_burn: FixedPoint32;
+        max_supply: FixedPoint32;
+    }
+
+    impl AuEtLedger {
+        fn can_spend(&self, amount: FixedPoint32, budget: &AuEtBudget) -> bool {
+            let new_total = self.total_burn.raw_u32 as u64 + amount.raw_u32 as u64;
+            let new_daily = self.daily_burn.raw_u32 as u64 + amount.raw_u32 as u64;
+            let new_session = self.session_burn.raw_u32 as u64 + amount.raw_u32 as u64;
+            new_total <= self.max_supply.raw_u32 as u64
+                && new_daily <= budget.daily_cap.raw_u32 as u64
+                && new_session <= budget.session_cap.raw_u32 as u64
+        }
+
+        fn burn(&mut self, amount: FixedPoint32) {
+            self.total_burn.raw_u32 =
+                self.total_burn.raw_u32.wrapping_add(amount.raw_u32);
+            self.daily_burn.raw_u32 =
+                self.daily_burn.raw_u32.wrapping_add(amount.raw_u32);
+            self.session_burn.raw_u32 =
+                self.session_burn.raw_u32.wrapping_add(amount.raw_u32);
+        }
+    }
+
+    struct EnergyEvent {
+        seq: u64;
+        reason: EnergyReason;
+        node_id: String;
+        amount: FixedPoint32;
+        timestamp_ms: u64;
+        epoch_hash_pre: [u8; 32];
+        epoch_hash_post: [u8; 32];
+    }
+
+    // -----------------------------
+    // BIOCOMPATIBILITY & SAFETY ENVELOPES (SOFTWARE-ONLY)
+    // -----------------------------
+
+    struct BiocompatibilityIndex {
+        // 0.0 - 1.0 in fixed point
+        index: FixedPoint32;
+    }
+
+    struct DoseLimits {
+        // Software-emulated limits; no real tissue is touched. [web:1][web:3]
+        max_sar_w_per_kg: FixedPoint32;   // SAR_max band
+        max_ti: FixedPoint32;            // TI_hard
+        max_mi: FixedPoint32;            // MI_hard
+        max_cem43: FixedPoint32;         // thermal dose
+        max_charge_density_uc_cm2: FixedPoint32; // per phase
+    }
+
+    struct NodeClassProfile {
+        class: NodeClass;
+        tissue_profile: TissueProfile;
+        biocomp: BiocompatibilityIndex;
+        dose_limits: DoseLimits;
+        // AU.ET scaling factors for workload coupling:
+        au_per_mw_s: FixedPoint32;
+        au_per_update: FixedPoint32;
+    }
+
+    // Filled node-class table for software-only simulation. Values are conservative. [web:1][web:3]
+    const NODE_CLASS_TABLE: [NodeClassProfile; 5] = [
+        NodeClassProfile {
+            class: NodeClass::PvdfRetinal,
+            tissue_profile: TissueProfile::Ocular,
+            biocomp: BiocompatibilityIndex { index: fx_from_f64(0.99) },
+            dose_limits: DoseLimits {
+                max_sar_w_per_kg: fx_from_f64(0.1),
+                max_ti: fx_from_f64(0.6),
+                max_mi: fx_from_f64(0.6),
+                max_cem43: fx_from_f64(1.0),
+                max_charge_density_uc_cm2: fx_from_f64(30.0),
+            },
+            au_per_mw_s: fx_from_f64(0.001),
+            au_per_update: fx_from_f64(5.0),
+        },
+        NodeClassProfile {
+            class: NodeClass::HapticPlate,
+            tissue_profile: TissueProfile::Peripheral,
+            biocomp: BiocompatibilityIndex { index: fx_from_f64(0.98) },
+            dose_limits: DoseLimits {
+                max_sar_w_per_kg: fx_from_f64(0.4),
+                max_ti: fx_from_f64(0.7),
+                max_mi: fx_from_f64(0.7),
+                max_cem43: fx_from_f64(2.0),
+                max_charge_density_uc_cm2: fx_from_f64(40.0),
+            },
+            au_per_mw_s: fx_from_f64(0.0008),
+            au_per_update: fx_from_f64(3.0),
+        },
+        NodeClassProfile {
+            class: NodeClass::RfusHelmet,
+            tissue_profile: TissueProfile::AdultTranscranial,
+            biocomp: BiocompatibilityIndex { index: fx_from_f64(0.90) },
+            dose_limits: DoseLimits {
+                max_sar_w_per_kg: fx_from_f64(2.0),
+                max_ti: fx_from_f64(0.8),
+                max_mi: fx_from_f64(0.7),
+                max_cem43: fx_from_f64(0.5),
+                max_charge_density_uc_cm2: fx_from_f64(0.0),
+            },
+            au_per_mw_s: fx_from_f64(0.002),
+            au_per_update: fx_from_f64(10.0),
+        },
+        NodeClassProfile {
+            class: NodeClass::MicromoteKnn,
+            tissue_profile: TissueProfile::AdultTranscranial,
+            biocomp: BiocompatibilityIndex { index: fx_from_f64(0.97) },
+            dose_limits: DoseLimits {
+                max_sar_w_per_kg: fx_from_f64(1.5),
+                max_ti: fx_from_f64(0.75),
+                max_mi: fx_from_f64(0.65),
+                max_cem43: fx_from_f64(0.5),
+                max_charge_density_uc_cm2: fx_from_f64(10.0),
+            },
+            au_per_mw_s: fx_from_f64(0.003),
+            au_per_update: fx_from_f64(8.0),
+        },
+        NodeClassProfile {
+            class: NodeClass::SoftEcog,
+            tissue_profile: TissueProfile::AdultTranscranial,
+            biocomp: BiocompatibilityIndex { index: fx_from_f64(0.96) },
+            dose_limits: DoseLimits {
+                max_sar_w_per_kg: fx_from_f64(0.8),
+                max_ti: fx_from_f64(0.7),
+                max_mi: fx_from_f64(0.6),
+                max_cem43: fx_from_f64(1.0),
+                max_charge_density_uc_cm2: fx_from_f64(30.0),
+            },
+            au_per_mw_s: fx_from_f64(0.0015),
+            au_per_update: fx_from_f64(6.0),
+        },
+    ];
+
+    // -----------------------------
+    // VIRTUAL NODE & SPIKING MODEL (SOFTWARE-ONLY)
+    // -----------------------------
+
+    struct LifParams {
+        tau_m_ms: FixedPoint32;
+        r_m_ohm: FixedPoint32;
+        c_m_nf: FixedPoint32;
+        v_th_mv: FixedPoint32;
+        v_reset_mv: FixedPoint32;
+        au_per_spike: FixedPoint32;
+    }
+
+    struct VirtualNodeMetrics {
+        spike_rate_hz: f64;
+        avg_power_mw: f64;
+        ti: f64;
+        mi: f64;
+        sar: f64;
+        cem43: f64;
+        impedance_ohm: f64;
+        last_impedance_drift_pct: f64;
+    }
+
+    struct VirtualNode {
+        id: String;
+        class: NodeClass;
+        lif_params: LifParams;
+        last_symbol: u8;
+        metrics: VirtualNodeMetrics;
+        q_phase_coulomb: f64;
+        area_cm2: f64;
+    }
+
+    impl VirtualNode {
+        fn update_charge(&mut self, i_ma: f64, dt_ms: f64) -> bool {
+            // Q_{k+1} = Q_k + I_k * Δt, in Coulomb. [web:2]
+            let q_delta = (i_ma / 1000.0) * (dt_ms / 1000.0);
+            self.q_phase_coulomb += q_delta;
+            let density_uc_cm2 =
+                (self.q_phase_coulomb * 1.0e6) / self.area_cm2;
+            let profile = get_profile(self.class);
+            let limit = fx_to_f64(profile.dose_limits.max_charge_density_uc_cm2);
+            density_uc_cm2.abs() <= limit
+        }
+
+        fn compute_sar(&self, i_ma: f64, r_ohm: f64, mass_kg: f64) -> f64 {
+            // SAR_k = I_k^2 R_k / (m * 10^6). [web:2]
+            let i_amp = i_ma / 1000.0;
+            (i_amp * i_amp * r_ohm) / (mass_kg * 1.0e6)
+        }
+
+        fn emit_spike_symbol(&mut self, window_ms: u64, spike_count: u32) -> u8 {
+            // Map spike rate to 0..255 symbol; discard timing. [web:1]
+            let rate_hz = spike_count as f64 / (window_ms as f64 / 1000.0);
+            self.metrics.spike_rate_hz = rate_hz;
+            let scaled = (rate_hz.min(1000.0) / 1000.0 * 255.0) as u8;
+            self.last_symbol = scaled;
+            scaled
+        }
+    }
+
+    fn get_profile(class: NodeClass) -> NodeClassProfile {
+        for p in NODE_CLASS_TABLE {
+            if p.class == class {
+                return p;
+            }
+        }
+        // Fallback: highly conservative dummy
+        NodeClassProfile {
+            class,
+            tissue_profile: TissueProfile::AdultTranscranial,
+            biocomp: BiocompatibilityIndex { index: fx_from_f64(0.5) },
+            dose_limits: DoseLimits {
+                max_sar_w_per_kg: fx_from_f64(0.1),
+                max_ti: fx_from_f64(0.5),
+                max_mi: fx_from_f64(0.5),
+                max_cem43: fx_from_f64(0.1),
+                max_charge_density_uc_cm2: fx_from_f64(10.0),
+            },
+            au_per_mw_s: fx_from_f64(0.01),
+            au_per_update: fx_from_f64(20.0),
+        }
+    }
+
+    // -----------------------------
+    // OTA/DOT CRATE BLUEPRINT (RUST-SHAPED)
+    // -----------------------------
+
+    module neuromorphic_ota {
+
+        use super::*;
+
+        struct OtaManifest {
+            firmware_hash: [u8; 32];
+            weights_hash: [u8; 32];
+            version: String;
+            node_class: NodeClass;
+            max_power_mw: u32;
+            max_spike_rate_hz: u32;
+            ti_limit: f32;
+            mi_limit: f32;
+            valid_from_ms: u64;
+            valid_until_ms: u64;
+            signature: Vec<u8>;
+            publisher_pubkey: Vec<u8>;
+        }
+
+        struct DotWindow {
+            start_ms: u64;
+            end_ms: u64;
+            max_temp_c: f32;
+            max_cem43: f32;
+            au_budget: AuEtBudget;
+        }
+
+        struct NodeMetricsExt {
+            power_mw: f32;
+            spike_rate_hz: f32;
+            ti: f32;
+            mi: f32;
+            cem43: f32;
+            sar: f32;
+        }
+
+        trait NeuromorphicNode {
+            fn id(&self) -> &str;
+            fn node_class(&self) -> NodeClass;
+            fn metrics(&self) -> NodeMetricsExt;
+
+            fn apply_firmware(&mut self, fw: &[u8]) -> Result<(), String>;
+            fn apply_weights(&mut self, w: &[u8]) -> Result<(), String>;
+            fn snapshot_state_hash(&self) -> [u8; 32];
+        }
+
+        struct SimBackendNode {
+            inner: VirtualNode;
+            last_hash: [u8; 32];
+        }
+
+        impl NeuromorphicNode for SimBackendNode {
+            fn id(&self) -> &str { &self.inner.id }
+
+            fn node_class(&self) -> NodeClass { self.inner.class }
+
+            fn metrics(&self) -> NodeMetricsExt {
+                NodeMetricsExt {
+                    power_mw: self.inner.metrics.avg_power_mw as f32,
+                    spike_rate_hz: self.inner.metrics.spike_rate_hz as f32,
+                    ti: self.inner.metrics.ti as f32,
+                    mi: self.inner.metrics.mi as f32,
+                    cem43: self.inner.metrics.cem43 as f32,
+                    sar: self.inner.metrics.sar as f32,
+                }
+            }
+
+            fn apply_firmware(&mut self, _fw: &[u8]) -> Result<(), String> {
+                // Pure simulation: just mix hash state.
+                self.last_hash = blake2s_mix(self.last_hash, 0xF1);
+                Ok(())
+            }
+
+            fn apply_weights(&mut self, _w: &[u8]) -> Result<(), String> {
+                self.last_hash = blake2s_mix(self.last_hash, 0x0W);
+                Ok(())
+            }
+
+            fn snapshot_state_hash(&self) -> [u8; 32] {
+                self.last_hash
+            }
+        }
+
+        fn blake2s_mix(prev: [u8; 32], tag: u8) -> [u8; 32] {
+            let mut out = prev;
+            for i in 0..32 {
+                out[i] ^= (tag.wrapping_add(i as u8));
+            }
+            out
+        }
+
+        fn verify_signature(manifest: &OtaManifest, manifest_bytes: &[u8]) -> bool {
+            // Hook point: plug in Ed25519/BLS in real runtime. Hash+sig format matches CyberOrganic logs. [web:1]
+            let _digest = sha256(manifest_bytes);
+            !manifest.signature.is_empty() && !manifest.publisher_pubkey.is_empty()
+        }
+
+        fn verify_hashes(manifest: &OtaManifest, fw_bytes: &[u8], w_bytes: &[u8]) -> bool {
+            let fw_hash = sha256(fw_bytes);
+            let w_hash = sha256(w_bytes);
+            fw_hash == manifest.firmware_hash && w_hash == manifest.weights_hash
+        }
+
+        fn sha256(bytes: &[u8]) -> [u8; 32] {
+            // Placeholder; real implementation via RustCrypto.
+            let mut h = [0u8; 32];
+            for (i, b) in bytes.iter().enumerate() {
+                h[i % 32] ^= *b;
+            }
+            h
+        }
+
+        struct SafetyProfile {
+            node_profiles: Vec<NodeClassProfile>;
+            au_budget: AuEtBudget;
+        }
+
+        struct OtaEvent {
+            seq: u64;
+            node_id: String;
+            manifest_version: String;
+            status: UpdateStatus;
+            pre_hash: [u8; 32];
+            post_hash: [u8; 32];
+            energy_delta: FixedPoint32;
+            ti_snapshot: f32;
+            mi_snapshot: f32;
+            cem43_snapshot: f32;
+            log_hash: [u8; 32];
+        }
+
+        fn hash_event(ev: &OtaEvent, prev_hash: [u8; 32]) -> [u8; 32] {
+            let mut buf = Vec::new();
+            buf.extend_from_slice(&prev_hash);
+            buf.extend_from_slice(&ev.seq.to_le_bytes());
+            buf.extend_from_slice(ev.node_id.as_bytes());
+            buf.extend_from_slice(ev.manifest_version.as_bytes());
+            buf.extend_from_slice(&(ev.status as u32).to_le_bytes());
+            buf.extend_from_slice(&ev.pre_hash);
+            buf.extend_from_slice(&ev.post_hash);
+            buf.extend_from_slice(&ev.energy_delta.raw_u32.to_le_bytes());
+            sha256(&buf)
+        }
+
+        struct UpdatePlanEntry {
+            node_id: String;
+            window: Option<DotWindow>;
+            allowed: bool;
+            reason: String;
+        }
+
+        struct UpdateResult {
+            node_id: String;
+            status: UpdateStatus;
+            event: Option<OtaEvent>;
+        }
+
+        struct OtaEngine<'a> {
+            ledger: &'a mut AuEtLedger;
+            safety: SafetyProfile;
+            nodes: Vec<Box<dyn NeuromorphicNode>>,
+            last_log_hash: [u8; 32],
+            next_seq: u64,
+        }
+
+        impl<'a> OtaEngine<'a> {
+            fn can_update(
+                &self,
+                now_ms: u64,
+                node: &dyn NeuromorphicNode,
+                manifest: &OtaManifest,
+            ) -> (bool, String) {
+                if now_ms < manifest.valid_from_ms || now_ms > manifest.valid_until_ms {
+                    return (false, "manifest_not_in_valid_window".into());
+                }
+
+                let metrics = node.metrics();
+                if metrics.power_mw as u32 > manifest.max_power_mw {
+                    return (false, "power_bound_exceeded".into());
+                }
+                if metrics.spike_rate_hz as u32 > manifest.max_spike_rate_hz {
+                    return (false, "spike_rate_bound_exceeded".into());
+                }
+                if metrics.ti > manifest.ti_limit {
+                    return (false, "ti_limit_exceeded".into());
+                }
+                if metrics.mi > manifest.mi_limit {
+                    return (false, "mi_limit_exceeded".into());
+                }
+
+                let profile = get_profile(node.node_class());
+                if metrics.sar as f64
+                    > fx_to_f64(profile.dose_limits.max_sar_w_per_kg)
+                {
+                    return (false, "sar_limit_exceeded".into());
+                }
+                if metrics.cem43 as f64
+                    > fx_to_f64(profile.dose_limits.max_cem43)
+                {
+                    return (false, "cem43_limit_exceeded".into());
+                }
+
+                let cost = profile.au_per_update;
+                if !self.ledger.can_spend(cost, &self.safety.au_budget) {
+                    return (false, "au_et_budget_exceeded".into());
+                }
+
+                (true, "ok".into())
+            }
+
+            fn plan_update(
+                &self,
+                now_ms: u64,
+                manifest: &OtaManifest,
+            ) -> Vec<UpdatePlanEntry> {
+                let mut plans = Vec::new();
+                for node in &self.nodes {
+                    let (ok, reason) = self.can_update(now_ms, node.as_ref(), manifest);
+                    let wnd = if ok {
+                        Some(DotWindow {
+                            start_ms: now_ms,
+                            end_ms: now_ms + 5 * 60 * 1000,
+                            max_temp_c: 40.0,
+                            max_cem43: 1.0,
+                            au_budget: self.safety.au_budget.clone(),
+                        })
+                    } else {
+                        None
+                    };
+                    plans.push(UpdatePlanEntry {
+                        node_id: node.id().to_string(),
+                        window: wnd,
+                        allowed: ok,
+                        reason,
+                    });
+                }
+                plans
+            }
+
+            fn execute_plan(
+                &mut self,
+                manifest: &OtaManifest,
+                fw_bytes: &[u8],
+                w_bytes: &[u8],
+                plans: &[UpdatePlanEntry],
+            ) -> Vec<UpdateResult> {
+                let mut results = Vec::new();
+
+                for plan in plans {
+                    let node_opt = self.nodes.iter_mut()
+                        .find(|n| n.id() == plan.node_id);
+
+                    if node_opt.is_none() {
+                        results.push(UpdateResult {
+                            node_id: plan.node_id.clone(),
+                            status: UpdateStatus::Failed,
+                            event: None,
+                        });
+                        continue;
+                    }
+
+                    let node = node_opt.unwrap();
+
+                    if !plan.allowed {
+                        results.push(UpdateResult {
+                            node_id: node.id().to_string(),
+                            status: UpdateStatus::SkippedSafety,
+                            event: None,
+                        });
+                        continue;
+                    }
+
+                    if !verify_hashes(manifest, fw_bytes, w_bytes) {
+                        results.push(UpdateResult {
+                            node_id: node.id().to_string(),
+                            status: UpdateStatus::Failed,
+                            event: None,
+                        });
+                        continue;
+                    }
+
+                    let pre_hash = node.snapshot_state_hash();
+                    let metrics_before = node.metrics();
+
+                    if let Err(_) = node.apply_firmware(fw_bytes) {
+                        results.push(UpdateResult {
+                            node_id: node.id().to_string(),
+                            status: UpdateStatus::Failed,
+                            event: None,
+                        });
+                        continue;
+                    }
+                    if let Err(_) = node.apply_weights(w_bytes) {
+                        results.push(UpdateResult {
+                            node_id: node.id().to_string(),
+                            status: UpdateStatus::Failed,
+                            event: None,
+                        });
+                        continue;
+                    }
+
+                    let post_hash = node.snapshot_state_hash();
+                    let metrics_after = node.metrics();
+
+                    let profile = get_profile(node.node_class());
+                    let cost = profile.au_per_update;
+
+                    if !self.ledger.can_spend(cost, &self.safety.au_budget) {
+                        // Roll back logically by discarding new state in sim; no real hardware touched.
+                        results.push(UpdateResult {
+                            node_id: node.id().to_string(),
+                            status: UpdateStatus::SkippedSafety,
+                            event: None,
+                        });
+                        continue;
+                    }
+
+                    self.ledger.burn(cost);
+
+                    let ev = OtaEvent {
+                        seq: self.next_seq,
+                        node_id: node.id().to_string(),
+                        manifest_version: manifest.version.clone(),
+                        status: UpdateStatus::Applied,
+                        pre_hash,
+                        post_hash,
+                        energy_delta: cost,
+                        ti_snapshot: metrics_after.ti,
+                        mi_snapshot: metrics_after.mi,
+                        cem43_snapshot: metrics_after.cem43,
+                        log_hash: [0u8; 32],
+                    };
+                    let new_hash = hash_event(&ev, self.last_log_hash);
+                    self.last_log_hash = new_hash;
+                    let mut ev2 = ev;
+                    ev2.log_hash = new_hash;
+                    self.next_seq += 1;
+
+                    results.push(UpdateResult {
+                        node_id: node.id().to_string(),
+                        status: UpdateStatus::Applied,
+                        event: Some(ev2),
+                    });
+                }
+
+                results
+            }
+        }
+    }
+
+    // -----------------------------
+    // SOFTWARE-ONLY BIO-MECHANICAL STACK GLUE
+    // -----------------------------
+
+    struct SoftBioStackConfig {
+        nodes: Vec<VirtualNode>;
+        ledger: AuEtLedger;
+        au_budget: AuEtBudget;
+    }
+
+    fn init_soft_bio_stack() -> SoftBioStackConfig {
+        let nodes = vec![
+            VirtualNode {
+                id: "sim_pvdf_retina_0".into(),
+                class: NodeClass::PvdfRetinal,
+                lif_params: LifParams {
+                    tau_m_ms: fx_from_f64(20.0),
+                    r_m_ohm: fx_from_f64(100e6),
+                    c_m_nf: fx_from_f64(0.1),
+                    v_th_mv: fx_from_f64(-50.0),
+                    v_reset_mv: fx_from_f64(-65.0),
+                    au_per_spike: fx_from_f64(0.0001),
+                },
+                last_symbol: 0,
+                metrics: VirtualNodeMetrics {
+                    spike_rate_hz: 0.0,
+                    avg_power_mw: 0.0,
+                    ti: 0.1,
+                    mi: 0.1,
+                    sar: 0.01,
+                    cem43: 0.0,
+                    impedance_ohm: 1.0e6,
+                    last_impedance_drift_pct: 0.0,
+                },
+                q_phase_coulomb: 0.0,
+                area_cm2: 0.05,
+            },
+            VirtualNode {
+                id: "sim_soft_ecog_0".into(),
+                class: NodeClass::SoftEcog,
+                lif_params: LifParams {
+                    tau_m_ms: fx_from_f64(25.0),
+                    r_m_ohm: fx_from_f64(120e6),
+                    c_m_nf: fx_from_f64(0.08),
+                    v_th_mv: fx_from_f64(-52.0),
+                    v_reset_mv: fx_from_f64(-68.0),
+                    au_per_spike: fx_from_f64(0.00015),
+                },
+                last_symbol: 0,
+                metrics: VirtualNodeMetrics {
+                    spike_rate_hz: 0.0,
+                    avg_power_mw: 0.0,
+                    ti: 0.1,
+                    mi: 0.1,
+                    sar: 0.02,
+                    cem43: 0.0,
+                    impedance_ohm: 0.8e6,
+                    last_impedance_drift_pct: 0.0,
+                },
+                q_phase_coulomb: 0.0,
+                area_cm2: 0.2,
+            },
+        ];
+
+        let ledger = AuEtLedger {
+            total_burn: fx_from_f64(0.0),
+            daily_burn: fx_from_f64(0.0),
+            session_burn: fx_from_f64(0.0),
+            max_supply: fx_from_f64(1_000_000.0),
+        };
+
+        let au_budget = AuEtBudget {
+            daily_cap: fx_from_f64(10_000.0),
+            session_cap: fx_from_f64(1_000.0),
+        };
+
+        SoftBioStackConfig { nodes, ledger, au_budget }
+    }
+
+    // High-level entrypoint: spin up simulation-only biomechanical integration with OTA scheduler.
+    fn boot_soft_biomech_runtime() {
+        let mut cfg = init_soft_bio_stack();
+
+        // Wrap nodes into OTA engine’s simulated backend
+        let mut ota_nodes: Vec<Box<dyn neuromorphic_ota::NeuromorphicNode>> = Vec::new();
+        for n in cfg.nodes.iter() {
+            let sim = neuromorphic_ota::SimBackendNode {
+                inner: n.clone(),
+                last_hash: [0u8; 32],
+            };
+            ota_nodes.push(Box::new(sim));
+        }
+
+        let safety_profile = neuromorphic_ota::SafetyProfile {
+            node_profiles: NODE_CLASS_TABLE.to_vec(),
+            au_budget: cfg.au_budget.clone(),
+        };
+
+        let mut engine = neuromorphic_ota::OtaEngine {
+            ledger: &mut cfg.ledger,
+            safety: safety_profile,
+            nodes: ota_nodes,
+            last_log_hash: [0u8; 32],
+            next_seq: 1,
+        };
+
+        // Example: plan and apply a software-only manifest update
+        let manifest = neuromorphic_ota::OtaManifest {
+            firmware_hash: [0xAA; 32],
+            weights_hash: [0xBB; 32],
+            version: "1.0.0-sim".into(),
+            node_class: NodeClass::SoftEcog,
+            max_power_mw: 50,
+            max_spike_rate_hz: 500,
+            ti_limit: 0.7,
+            mi_limit: 0.6,
+            valid_from_ms: 0,
+            valid_until_ms: u64::MAX,
+            signature: vec![1, 2, 3],
+            publisher_pubkey: vec![4, 5, 6],
+        };
+
+        let now_ms = 1_000_000;
+        let plans = engine.plan_update(now_ms, &manifest);
+        let fw_bytes = vec![0u8; 256];
+        let w_bytes = vec![1u8; 512];
+
+        let _results = engine.execute_plan(&manifest, &fw_bytes, &w_bytes, &plans);
+
+        // At this point all biomechanical constraints, AU.ET ledger invariants,
+        // and audit hashes are enforced in pure software, with no possibility
+        // of driving real implants or tissue. [web:1][web:2][web:3]
+    }
+}

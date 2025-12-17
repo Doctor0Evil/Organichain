@@ -1,0 +1,29 @@
+{
+  "$id": "https://au.bioaug.org/schemas/RiskSample.schema.json",
+  "title": "RiskSample",
+  "description": "Deterministic risk evaluation output for neuromorphic cybernetic regulators.",
+  "type": "object",
+  "properties": {
+    "risk_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "ed_percent": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0
+    },
+    "sf_psych": {
+      "type": "number",
+      "minimum": 0.0
+    },
+    "h_mod": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    }
+  },
+  "required": ["risk_score", "ed_percent", "sf_psych", "h_mod"],
+  "additionalProperties": false
+}

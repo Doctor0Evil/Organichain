@@ -1,0 +1,15 @@
+[audit_log_hashchain]
+Processes input:
+    - event_id: string (event identifier)
+    - prev_hash: string (SHA2-512 hexadecimal previous hash)
+Generates output:
+    - current_hash: string (new hash value)
+Implements protocol (hashing mechanism):
+    - Hashes using SHA2-512 (secure hash algorithm 2-512, NIST certified)
+    - Chains via append-only, time/clock verified secure ledger (immutable record)
+Sets dest-path: /infra/audit_trails/daily/${event_id}/
+Enforces logging:
+    - Ensures compliance with SOX, ISO/IEC 27001
+    - Stores logs at: /infra/audit_trails/daily/
+Manages lifecycle: 7+ year immutable retention, compliance export features
+Enforces security_policy: tamperproof chain integrity, export readiness

@@ -1,0 +1,10 @@
+// Destination: [translate:zenith-labs/src/core/ethicsengine.aln]
+TITLE [translate:Ethics Engine: Anti-Greed, Trust, Audit]
+function notifyadminevent(type, entityid) = NotificationSystem.sendevent(type, entityid)
+function evaluateentity(profile)
+    if profile.profitmargin > maxprofit then return REJECTED, [translate:"Excessive profit"]
+    if profile.complaints > maxcomplaints then return REJECTED, [translate:"Too many complaints"]
+    if profile.trustscore < trustthreshold then return BLOCKED, [translate:"Low trust"]
+    return APPROVED, [translate:"Compliant"]
+HOOKS: [translate:audittrail], [translate:accesscontrol]
+HEX: [translate:1A9F8C3B2E1D0A772340B]

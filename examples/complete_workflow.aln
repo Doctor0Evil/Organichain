@@ -1,0 +1,25 @@
+MODULE complete-workflow-replacement
+  manifest:
+    author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+    original_source: examples/complete_workflow.py
+    replaced_on: 2025-11-25T00:00:00Z
+    policy: NO-PYTHON-STRICT
+  WORKFLOW:
+    steps: [register_user, grant_consent, register_device, start_session, update_metrics, generate_audit]
+  FUNCTIONS:
+    function Run() {
+      user = register_user("example_user")
+      grant_consent(user.id, "BCI_SESSION")
+      device = register_device("device-123", user.did)
+      session = start_session(device.id, user.did)
+      update_metrics(session.id, {cognitive_load:0.5, entropy:0.04})
+      generate_audit(user.did)
+      return TRUE
+    }
+    function register_user(name) { AuditLog.record("USER_REGISTER", name); return {id: name, did: "did:example:" + name} }
+    function grant_consent(user_id, scope) { AuditLog.record("CONSENT_GRANT", user_id, scope) }
+    function register_device(id, owner_did) { AuditLog.record("DEVICE_REGISTER", id, owner_did); return {id:id} }
+    function start_session(device_id, owner_did) { AuditLog.record("SESSION_START", device_id, owner_did); return {id: device_id + "-sess"} }
+    function update_metrics(session_id, metrics) { AuditLog.record("METRICS", session_id, metrics.cognitive_load, metrics.entropy) }
+    function generate_audit(owner_did) { AuditLog.record("AUDIT_EXPORT", owner_did) }
+END complete-workflow-replacement

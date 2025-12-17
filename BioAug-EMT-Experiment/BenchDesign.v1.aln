@@ -1,0 +1,242 @@
+dataset BioAug.EMTBench.Design.v1
+
+namespace AU.CyberCore.BioAugBench
+
+type u64       uint64
+type f32       float32
+type bool      bool
+type hash64    u64
+type ts64      u64
+
+#
+# 1. Hardware + topology model (MT6883 + DAQ + phantom)
+#
+
+record SocNode
+  node_id          hash64
+  soc_name         string
+  arch             string
+  process_nm       u64
+  has_ai_cores     bool
+  uart_ports       u64
+  i2c_buses        u64
+  spi_buses        u64
+end
+
+record DaqChannel
+  channel_id       u64
+  kind             string     # "temp","force","voltage","current"
+  range_min        f32
+  range_max        f32
+  units            string
+  sample_period_ms u64
+end
+
+record PhantomSite
+  phantom_id       u64
+  description      string
+  iso_profile      string     # ISO 10993/14708 mapping
+  sensor_temp_id   u64
+  sensor_force_id  u64
+end
+
+record HostNode
+  host_id          hash64
+  os_flavor        string
+  rust_toolchain   string
+  aln_runtime      string
+  matlab_version   string
+  db_dsn           string
+end
+
+instance MT6883_SoC
+  SocNode
+  node_id          0xA8F3_6883_0000_0001u64
+  soc_name         "MT6883 Dimensity-class bench carrier"
+  arch             "ARMv8-A"
+  process_nm       7u64
+  has_ai_cores     true
+  uart_ports       3u64
+  i2c_buses        2u64
+  spi_buses        2u64
+end
+
+instance BenchDAQ_Temp
+  DaqChannel
+  channel_id       1u64
+  kind             "temp"
+  range_min        20.0f32
+  range_max        60.0f32
+  units            "degC"
+  sample_period_ms 10u64
+end
+
+instance BenchDAQ_Force
+  DaqChannel
+  channel_id       2u64
+  kind             "force"
+  range_min        0.0f32
+  range_max        10.0f32
+  units            "N"
+  sample_period_ms 10u64
+end
+
+instance BenchDAQ_Voltage
+  DaqChannel
+  channel_id       3u64
+  kind             "voltage"
+  range_min        0.0f32
+  range_max        20.0f32
+  units            "V"
+  sample_period_ms 10u64
+end
+
+instance BenchDAQ_Current
+  DaqChannel
+  channel_id       4u64
+  kind             "current"
+  range_min        0.0f32
+  range_max        500.0f32
+  units            "mA"
+  sample_period_ms 10u64
+end
+
+instance Phantom_Tissue_A
+  PhantomSite
+  phantom_id       101u64
+  description      "Gel-based ISO phantom with thermocouple + load cell"
+  iso_profile      "ISO10993/14708 phantom A"
+  sensor_temp_id   1u64
+  sensor_force_id  2u64
+end
+
+instance BenchHost_Workstation
+  HostNode
+  host_id          0xDEAD_HOST_0000_0001u64
+  os_flavor        "Ubuntu 24.04 LTS"
+  rust_toolchain   "stable-aarch64-unknown-linux-gnu"
+  aln_runtime      "ALN-Core-VM 1.0"
+  matlab_version   "MATLAB R2024a"
+  db_dsn           "postgres://emt_bench@localhost:5432/emt_bench"
+end
+
+#
+# 2. EMT bench samples + linkage to envelopes
+#
+
+import AU.CyberCore.EnergyMassTissue.v1 as EMT
+
+record EMTBenchSample
+  sampleid            u64
+  envelopeid          u64
+  node_id             hash64
+  timestampms         ts64
+  measured_temp_c     f32
+  baseline_temp_c     f32
+  measured_force_n    f32
+  supply_voltage_v    f32
+  supply_current_ma   f32
+end
+
+instance EMTBenchSample3
+  EMTBenchSample
+
+  sampleid            1u64
+  envelopeid          2001u64
+  node_id             0xA8F3_6883_0000_0001u64
+  timestampms         1761760005200u64
+  measured_temp_c     36.9f32
+  baseline_temp_c     36.6f32
+  measured_force_n    0.08f32
+  supply_voltage_v    3.30f32
+  supply_current_ma   13.5f32
+
+  sampleid            2u64
+  envelopeid          2002u64
+  node_id             0xA8F3_6883_0000_0001u64
+  timestampms         1761760005520u64
+  measured_temp_c     37.4f32
+  baseline_temp_c     36.7f32
+  measured_force_n    1.25f32
+  supply_voltage_v    5.00f32
+  supply_current_ma   82.0f32
+
+  sampleid            3u64
+  envelopeid          2003u64
+  node_id             0xA8F3_6883_0000_0001u64
+  timestampms         1761760005850u64
+  measured_temp_c     36.5f32
+  baseline_temp_c     36.4f32
+  measured_force_n    0.00f32
+  supply_voltage_v    1.80f32
+  supply_current_ma   2.1f32
+end
+
+#
+# 3. Bench safety and EMT-governor conformance block
+#
+
+block ALN.SemanticBlock.EMTBenchSafety
+  id            0x0000_0000_0000_EB01u64
+  featureid     0u64
+  codelenbytes  256u32
+  codebytes utf8:
+    # EMT bench safety for phantom tissue
+
+    function temp_rise_ok(measured f32,
+                          baseline f32,
+                          limit_delta f32) -> bool {
+      let delta = measured - baseline
+      if delta <= limit_delta + 0.05 then return true
+      return false
+    }
+
+    function energy_ok(energy_density f32,
+                       limit_energy f32) -> bool {
+      if energy_density <= limit_energy * 1.02 then return true
+      return false
+    }
+
+    policy bench.temp_and_energy_within_emtlaw
+      require forall EMTBenchSample s, EMT.EMTEnvelope e:
+        s.envelopeid == e.envelopeid
+          => temp_rise_ok(s.measured_temp_c,
+                          s.baseline_temp_c,
+                          e.limit_temp_delta_c)
+             and energy_ok(e.energy_density_mjmm3,
+                           e.limit_energy_mjmm3)
+    end
+end
+
+#
+# 4. Experiment protocol and GitHub/DB wiring (structural only)
+#
+
+record EMTBenchRun
+  runid              u64
+  phantom_id         u64
+  host_id            hash64
+  node_id            hash64
+  git_commit_hash    hash64
+  matlab_script      string
+  lua_bt_script      string
+  sql_schema_file    string
+  start_ts_ms        ts64
+  end_ts_ms          ts64
+  outcome            string   # "PASS","FAIL","ABORT"
+end
+
+instance EMTBenchRun_Prototype
+  EMTBenchRun
+  runid              9001u64
+  phantom_id         101u64
+  host_id            0xDEAD_HOST_0000_0001u64
+  node_id            0xA8F3_6883_0000_0001u64
+  git_commit_hash    0xFEED_FACE_CAFE_0001u64
+  matlab_script      "matlab/EMTBenchAnalysis.m"
+  lua_bt_script      "lua/emt_stimulus_bt.lua"
+  sql_schema_file    "sql/emt_experiment_schema.sql"
+  start_ts_ms        1761760005000u64
+  end_ts_ms          1761760065000u64
+  outcome            "PASS"
+end

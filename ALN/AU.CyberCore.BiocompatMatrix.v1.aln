@@ -1,0 +1,22 @@
+enum TissueClass u8
+  NeuralCortex  1
+  PeripheralNerve 2
+  MuscleSkeletal 3
+  Cardiac       4
+  Dermal        5
+end
+
+record BiocompatMatrixRow
+  rowid             u64
+  featureid         u64
+  useridhash        hash64
+  tissue_class      TissueClass
+  tissuedepth_mm    f32
+  material_id_hash  hash32    # material stack ID
+  iso10993_score01  f32       # normalized composite score
+  iso14708_score01  f32       # active implantable compliance
+  heat_margin_c     f32       # margin before tissue limit
+  mech_stress_mpa   f32       # max allowable stress
+  approved          u8        # 1=clinically acceptable
+  reserved          u8[7]
+end

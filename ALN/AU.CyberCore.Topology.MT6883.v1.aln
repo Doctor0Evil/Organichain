@@ -1,0 +1,98 @@
+dataset AU.CyberCore.Topology.MT6883.v1
+
+namespace AU.CyberCore
+
+type f32 float32
+type u16 uint16
+type u64 uint64
+
+# 4×4 mesh of AI cores on MT6883, encoded as adjacency weights
+
+record TopologyMatrixHeader
+  matrixid        u64
+  rows            u16
+  cols            u16
+  reserved        u16[4]
+end
+
+record TopologyMatrixEntry
+  row_index       u16
+  col_index       u16
+  weight          f32   # 0=no link, 1=primary, 0.5=sub-link
+end
+
+instance TopologyMatrixHeader1
+  matrixid        0x0000_0000_0000_9000u64
+  rows            16u16
+  cols            16u16
+  reserved        0,0,0,0
+end
+
+# Sparse encoding of a 4×4 logical mesh (flattened 16 nodes)
+# Node indices: 0..15, neighbors share weight 1.0, diagonals 0.5
+
+instance TopologyMatrixEntry32
+  row_index 0u16  col_index 1u16  weight 1.0f32
+  row_index 0u16  col_index 4u16  weight 1.0f32
+
+  row_index 1u16  col_index 0u16  weight 1.0f32
+  row_index 1u16  col_index 2u16  weight 1.0f32
+  row_index 1u16  col_index 5u16  weight 1.0f32
+
+  row_index 2u16  col_index 1u16  weight 1.0f32
+  row_index 2u16  col_index 3u16  weight 1.0f32
+  row_index 2u16  col_index 6u16  weight 1.0f32
+
+  row_index 3u16  col_index 2u16  weight 1.0f32
+  row_index 3u16  col_index 7u16  weight 1.0f32
+
+  row_index 4u16  col_index 0u16  weight 1.0f32
+  row_index 4u16  col_index 5u16  weight 1.0f32
+  row_index 4u16  col_index 8u16  weight 1.0f32
+
+  row_index 5u16  col_index 1u16  weight 1.0f32
+  row_index 5u16  col_index 4u16  weight 1.0f32
+  row_index 5u16  col_index 6u16  weight 1.0f32
+  row_index 5u16  col_index 9u16  weight 1.0f32
+
+  row_index 6u16  col_index 2u16  weight 1.0f32
+  row_index 6u16  col_index 5u16  weight 1.0f32
+  row_index 6u16  col_index 7u16  weight 1.0f32
+  row_index 6u16  col_index 10u16 weight 1.0f32
+
+  row_index 7u16  col_index 3u16  weight 1.0f32
+  row_index 7u16  col_index 6u16  weight 1.0f32
+  row_index 7u16  col_index 11u16 weight 1.0f32
+
+  row_index 8u16  col_index 4u16  weight 1.0f32
+  row_index 8u16  col_index 9u16  weight 1.0f32
+  row_index 8u16  col_index 12u16 weight 1.0f32
+
+  row_index 9u16  col_index 5u16  weight 1.0f32
+  row_index 9u16  col_index 8u16  weight 1.0f32
+  row_index 9u16  col_index 10u16 weight 1.0f32
+  row_index 9u16  col_index 13u16 weight 1.0f32
+
+  row_index 10u16 col_index 6u16  weight 1.0f32
+  row_index 10u16 col_index 9u16  weight 1.0f32
+  row_index 10u16 col_index 11u16 weight 1.0f32
+  row_index 10u16 col_index 14u16 weight 1.0f32
+
+  row_index 11u16 col_index 7u16  weight 1.0f32
+  row_index 11u16 col_index 10u16 weight 1.0f32
+  row_index 11u16 col_index 15u16 weight 1.0f32
+
+  row_index 12u16 col_index 8u16  weight 1.0f32
+  row_index 12u16 col_index 13u16 weight 1.0f32
+
+  row_index 13u16 col_index 9u16  weight 1.0f32
+  row_index 13u16 col_index 12u16 weight 1.0f32
+  row_index 13u16 col_index 14u16 weight 1.0f32
+
+  row_index 14u16 col_index 10u16 weight 1.0f32
+  row_index 14u16 col_index 13u16 weight 1.0f32
+  row_index 14u16 col_index 15u16 weight 1.0f32
+
+  row_index 15u16 col_index 11u16 weight 1.0f32
+  row_index 15u16 col_index 14u16 weight 1.0f32
+end

@@ -1,0 +1,32 @@
+SECTION,PROTOCOL_WHITELIST
+ROW,value
+ROW,TLS1.3
+ROW,AES-256-GCM
+ROW,ChaCha20-Poly1305
+ROW,TSN
+ROW,PQC-Kyber
+ROW,IEEE-11073-SDC
+ROW,HL7-FHIR-R4
+ROW,QUIC-mTLS
+FOOTER,ENDPROTOCOLS
+
+SECTION,COMPLIANCE_WHITELIST
+ROW,value
+ROW,GDPR
+ROW,NIST-CSF
+ROW,EU-AI-Act-2024
+ROW,HIPAA
+ROW,ISO27001
+ROW,IEC62304
+ROW,ISO14971
+ROW,EU-MDR
+FOOTER,ENDCOMPLIANCE
+
+SECTION,VALIDATION_RULES
+ROW,target,rule
+ROW,/aln/functions/*.aln,"protocol_stack MUST reference only PROTOCOL_WHITELIST entries joined by '+'"
+ROW,/aln/functions/*.aln,"compliance_check MUST be '+'-separated values all in COMPLIANCE_WHITELIST"
+ROW,/aln/datashards/*.aln,"compliance field MUST be '+'-separated subset of COMPLIANCE_WHITELIST"
+ROW,/aln/datasets/*.aln,"iec_62304_class MUST be one of 'A','B','C'"
+ROW,/aln/datasets/*.aln,"iso_14971_profile MUST be one of 'low_hazard','medium_hazard','high_hazard'"
+FOOTER,ENDRULES

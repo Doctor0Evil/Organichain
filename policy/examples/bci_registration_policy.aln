@@ -1,0 +1,440 @@
+"""
+Example ALN Policy: BCI Device Registration with Full Compliance
+Demonstrates comprehensive augmented-user rights enforcement
+"""
+
+policy BCIRegistrationPolicy extends NeuromorphicDevicePolicy {
+  # Consent requirements
+  require_explicit_consent: TRUE
+  require_informed_consent: TRUE
+  require_revocable_consent: TRUE
+  
+  # Medical requirements
+  require_medical_clearance: TRUE
+  require_psychological_assessment: TRUE
+  min_age: 18
+  
+  # Technical requirements
+  require_encryption: POST_QUANTUM
+  require_blockchain_anchor: TRUE
+  require_immutable_audit: TRUE
+  
+  # Rights enforcement
+  enforce_all_10_rights: TRUE
+  rights_violation_response: IMMEDIATE_QUARANTINE
+  
+  # Risk thresholds
+  max_cognitive_load: 0.80
+  max_entropy_level: 0.85
+  max_session_duration: 7200  # 2 hours
+  min_rest_period: 3600  # 1 hour
+  
+  # Compliance standards
+  required_certifications: ["FDA_APPROVED", "CE_MARKED"]
+  required_compliance: ["HIPAA", "GDPR", "ISO_27001", "ISO_13485"]
+  
+  # Escalation
+  escalate_high_risk: TRUE
+  notify_ethics_committee: TRUE
+}
+
+/**
+ * Complete BCI device registration workflow
+ * Enforces all 10 augmented-user rights
+ */
+function RegisterBCIDevice(device, user) {
+  # STEP 1: Verify Right to Consent
+  if (!RightsRegistry.verifyRight(user.id, RIGHT_TO_CONSENT)) {
+    AuditLog.record("RIGHTS_VIOLATION", device.id, user.id, {
+      'violated_right': 'RIGHT_TO_CONSENT',
+      'action': 'REGISTRATION_DENIED'
+    });
+    return BLOCK;
+  }
+  
+  # STEP 2: Verify explicit consent
+  consentStatus = ConsentManager.verify(user.id, "BCI_DEVICE_REGISTRATION", timestamp());
+  
+  if (!consentStatus.isActive OR !consentStatus.isExplicit OR !consentStatus.isInformed) {
+    AuditLog.record("CONSENT_FAILURE", device.id, user.id, {
+      'consent_active': consentStatus.isActive,
+      'consent_explicit': consentStatus.isExplicit,
+      'consent_informed': consentStatus.isInformed
+    });
+    
+    # Offer consent process
+    ConsentManager.requestInformedConsent(
+      user.id,
+      "BCI_DEVICE_REGISTRATION",
+      device.getInformedConsentDocument()
+    );
+    
+    return BLOCK;
+  }
+  
+  # STEP 3: Verify Right to Self-Ownership
+  if (!RightsRegistry.verifyRight(user.id, RIGHT_TO_SELF_OWNERSHIP)) {
+    AuditLog.record("RIGHTS_VIOLATION", device.id, user.id, {
+      'violated_right': 'RIGHT_TO_SELF_OWNERSHIP',
+      'action': 'REGISTRATION_DENIED'
+    });
+    return BLOCK;
+  }
+  
+  # STEP 4: Verify Right to Privacy
+  if (!RightsRegistry.verifyRight(user.id, RIGHT_TO_PRIVACY)) {
+    AuditLog.record("RIGHTS_VIOLATION", device.id, user.id, {
+      'violated_right': 'RIGHT_TO_PRIVACY',
+      'action': 'REGISTRATION_DENIED'
+    });
+    return BLOCK;
+  }
+  
+  # STEP 5: Device compliance verification
+  for (standard in BCIRegistrationPolicy.required_compliance) {
+    if (standard not in device.complianceStandards) {
+      AuditLog.record("DEVICE_NON_COMPLIANT", device.id, user.id, {
+        'missing_standard': standard
+      });
+      return BLOCK;
+    }
+  }
+  
+  # STEP 6: Certification verification
+  if (device.certificationLevel not in BCIRegistrationPolicy.required_certifications) {
+    AuditLog.record("DEVICE_NOT_CERTIFIED", device.id, user.id, {
+      'current_certification': device.certificationLevel,
+      'required': BCIRegistrationPolicy.required_certifications
+    });
+    return BLOCK;
+  }
+  
+  # STEP 7: Medical clearance
+  if (BCIRegistrationPolicy.require_medical_clearance) {
+    medicalClearance = MedicalService.getClearance(user.id, "BCI_DEVICE");
+    
+    if (!medicalClearance OR !medicalClearance.isValid) {
+      AuditLog.record("MEDICAL_CLEARANCE_REQUIRED", device.id, user.id);
+      
+      MedicalService.requestClearance(user.id, "BCI_DEVICE", {
+        'device_type': device.type,
+        'device_model': device.model,
+        'risk_level': device.riskLevel
+      });
+      
+      return ESCALATE;
+    }
+  }
+  
+  # STEP 8: Age verification
+  if (user.age < BCIRegistrationPolicy.min_age) {
+    AuditLog.record("AGE_RESTRICTION", device.id, user.id, {
+      'user_age': user.age,
+      'required_age': BCIRegistrationPolicy.min_age
+    });
+    return BLOCK;
+  }
+  
+  # STEP 9: Risk assessment
+  riskScore = CalculateDeviceRisk(device, user);
+  
+  if (riskScore.level == "EXTREME") {
+    AuditLog.record("EXTREME_RISK_DEVICE", device.id, user.id, {
+      'risk_score': riskScore.score,
+      'factors': riskScore.factors
+    });
+    
+    # Require multi-party approval
+    if (!device.hasEthicsApproval OR 
+        !device.hasMedicalApproval OR
+        !device.hasLegalApproval) {
+      
+      EscalationService.notify("ethics_committee", "HIGH_RISK_DEVICE_APPROVAL", {
+        'device_id': device.id,
+        'user_id': user.id,
+        'risk_assessment': riskScore
+      });
+      
+      return ESCALATE;
+    }
+  }
+  
+  # STEP 10: Generate DID (Decentralized Identifier)
+  did = DIDService.generate("infra:device", {
+    'manufacturer': device.manufacturer,
+    'model': device.model,
+    'serial': device.serialNumber,
+    'timestamp': timestamp()
+  });
+  
+  device.did = did;
+  
+  # STEP 11: Blockchain registration
+  if (BCIRegistrationPolicy.require_blockchain_anchor) {
+    blockchainProof = BlockchainRegistry.register(
+      device.did,
+      user.id,
+      timestamp(),
+      consentStatus.proof
+    );
+    
+    device.blockchainAnchor = blockchainProof;
+  }
+  
+  # STEP 12: Grant device rights
+  # Right to Exist
+  RightsRegistry.grantRight(
+    RIGHT_TO_EXISTENCE,
+    device.did,
+    "DEVICE",
+    "SYSTEM"
+  );
+  
+  # Right to Auditability
+  RightsRegistry.grantRight(
+    RIGHT_TO_AUDITABILITY,
+    device.did,
+    "DEVICE",
+    "SYSTEM"
+  );
+  
+  # Right to Rollback
+  RightsRegistry.grantRight(
+    RIGHT_TO_ROLLBACK,
+    device.did,
+    "DEVICE",
+    "SYSTEM"
+  );
+  
+  # STEP 13: Create audit trail
+  AuditTrail.log({
+    event: "BCI_DEVICE_REGISTERED",
+    device_did: device.did,
+    user_id: user.id,
+    consent_proof: consentStatus.proof,
+    blockchain_anchor: device.blockchainAnchor,
+    risk_assessment: riskScore,
+    compliance_verified: TRUE,
+    all_rights_granted: TRUE,
+    timestamp: timestamp()
+  });
+  
+  # STEP 14: Enable monitoring
+  MonitoringService.attach(device.did, {
+    cognitive_load: TRUE,
+    entropy_levels: TRUE,
+    unauthorized_access: TRUE,
+    rights_violations: TRUE,
+    data_transmission: TRUE
+  });
+  
+  # STEP 15: Notify user of successful registration
+  NotificationService.alert(user.id, {
+    title: "BCI Device Registered Successfully",
+    message: "Your device " + device.model + " has been registered with DID: " + device.did,
+    rights_granted: ["EXISTENCE", "AUDITABILITY", "ROLLBACK"],
+    blockchain_proof: device.blockchainAnchor
+  });
+  
+  return APPROVE;
+}
+
+/**
+ * Calculate comprehensive device risk score
+ */
+function CalculateDeviceRisk(device, user) {
+  score = 0;
+  factors = [];
+  
+  # Factor 1: Device type
+  if (device.type == "BCI_INVASIVE") {
+    score = score + 50;
+    factors.append("Invasive BCI device");
+  } else if (device.type == "NEURAL_IMPLANT") {
+    score = score + 60;
+    factors.append("Neural implant");
+  } else if (device.type == "NEUROMORPHIC_CHIP") {
+    score = score + 40;
+    factors.append("Neuromorphic chip");
+  }
+  
+  # Factor 2: Certification status
+  if (device.certificationLevel == "EXPERIMENTAL") {
+    score = score + 40;
+    factors.append("Experimental status");
+  } else if (device.certificationLevel == "PENDING") {
+    score = score + 30;
+    factors.append("Pending certification");
+  }
+  
+  # Factor 3: User vulnerability
+  if (user.age < 25) {
+    score = score + 15;
+    factors.append("Young user (brain still developing)");
+  }
+  
+  if (user.hasPreexistingCondition) {
+    score = score + 20;
+    factors.append("Preexisting medical condition");
+  }
+  
+  # Factor 4: Historical incidents
+  deviceIncidents = IncidentRegistry.getByDevice(device.model);
+  if (deviceIncidents.count > 0) {
+    score = score + (deviceIncidents.count * 10);
+    factors.append("Historical incidents: " + deviceIncidents.count);
+  }
+  
+  # Factor 5: Manufacturer reputation
+  manufacturerRating = ManufacturerRegistry.getRating(device.manufacturer);
+  if (manufacturerRating < 0.70) {
+    score = score + 25;
+    factors.append("Low manufacturer reputation");
+  }
+  
+  # Determine risk level
+  if (score < 50) {
+    level = "LOW";
+  } else if (score < 100) {
+    level = "MODERATE";
+  } else if (score < 150) {
+    level = "HIGH";
+  } else {
+    level = "EXTREME";
+  }
+  
+  return {
+    score: score,
+    level: level,
+    factors: factors
+  };
+}
+
+/**
+ * Event handler: BCI session start
+ */
+on BCISessionStart(session) {
+  device = DeviceRegistry.get(session.deviceDID);
+  user = UserRegistry.get(session.userID);
+  
+  # Verify consent still active
+  consentStatus = ConsentManager.verify(user.id, "BCI_SESSION", timestamp());
+  if (!consentStatus.isActive) {
+    session.terminate("CONSENT_EXPIRED");
+    NotificationService.alert(user.id, "Session terminated: Consent expired");
+    
+    AuditTrail.log({
+      event: "SESSION_START_DENIED",
+      reason: "CONSENT_EXPIRED",
+      session_id: session.id,
+      user_id: user.id,
+      device_did: device.did
+    });
+    
+    return;
+  }
+  
+  # Check temporal constraints
+  lastSession = SessionRegistry.getLastSession(user.id, device.did);
+  if (lastSession != NULL AND lastSession.endedAt != NULL) {
+    timeSinceLastSession = timestamp() - lastSession.endedAt;
+    
+    if (timeSinceLastSession < BCIRegistrationPolicy.min_rest_period) {
+      session.terminate("INSUFFICIENT_REST_PERIOD");
+      
+      remainingTime = BCIRegistrationPolicy.min_rest_period - timeSinceLastSession;
+      NotificationService.alert(
+        user.id,
+        "Please wait " + remainingTime + " seconds before starting next session"
+      );
+      
+      return;
+    }
+  }
+  
+  # Apply session policy
+  session.applyPolicy(BCIRegistrationPolicy);
+  
+  # Start monitoring
+  MonitoringService.attach(session.id, {
+    cognitive_load: TRUE,
+    entropy_levels: TRUE,
+    duration: TRUE
+  });
+  
+  # Log session start
+  AuditTrail.log({
+    event: "BCI_SESSION_STARTED",
+    session_id: session.id,
+    user_id: user.id,
+    device_did: device.did,
+    consent_proof: consentStatus.proof,
+    timestamp: timestamp()
+  });
+}
+
+/**
+ * Event handler: Anomaly detection
+ */
+on BCISessionAnomaly(session, anomaly) {
+  # Immediate response based on severity
+  if (anomaly.severity >= CRITICAL) {
+    # Quarantine session
+    session.quarantine();
+    
+    # Quarantine device
+    device = DeviceRegistry.get(session.deviceDID);
+    DeviceRegistry.setStatus(device.did, "QUARANTINED");
+    
+    # Log violation
+    RightsRegistry.recordViolation(
+      RIGHT_TO_META_COGNITIVE_INTEGRITY,
+      device.did,
+      "SYSTEM",
+      CRITICAL,
+      "Critical anomaly detected during BCI session",
+      {
+        'session_id': session.id,
+        'anomaly_type': anomaly.type,
+        'severity': anomaly.severity
+      }
+    );
+    
+    # Escalate
+    EscalationService.notify(
+      "security_team",
+      "CRITICAL_BCI_ANOMALY",
+      {
+        'session_id': session.id,
+        'device_did': device.did,
+        'user_id': session.userID,
+        'anomaly': anomaly
+      }
+    );
+    
+    # Emergency notification
+    NotificationService.alert(
+      session.userID,
+      {
+        title: "EMERGENCY: Session Quarantined",
+        message: "Critical anomaly detected. Device and session quarantined for your safety.",
+        severity: "CRITICAL",
+        contact_support: TRUE
+      }
+    );
+  }
+  
+  # Auto-rollback if configured
+  if (BCIRegistrationPolicy.auto_rollback_on_violation) {
+    rollbackPoint = anomaly.timestamp - 10;  # 10 seconds before anomaly
+    session.rollback(rollbackPoint);
+    
+    AuditTrail.log({
+      event: "AUTO_ROLLBACK_EXECUTED",
+      session_id: session.id,
+      anomaly_type: anomaly.type,
+      rollback_point: rollbackPoint,
+      timestamp: timestamp()
+    });
+  }
+}

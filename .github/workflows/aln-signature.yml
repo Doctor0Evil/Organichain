@@ -1,0 +1,42 @@
+name: "ALN Signature & Attestation"
+on:
+  workflow_dispatch:
+
+env:
+  UPLOADED_FILE_PATH: "/mnt/data/Chat_Wars.txt"
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p attest
+          tar czf attest/aln_networks.tgz aln || true
+          tar czf attest/scripts.tgz aln/scripts || true
+          if [ -f "$UPLOADED_FILE_PATH" ]; then
+            cp "$UPLOADED_FILE_PATH" attest/uploaded_original.txt || true
+          else
+            echo "Uploaded file not available on runner: $UPLOADED_FILE_PATH"
+          fi
+
+      - name: Compute SHA256 digests
+        run: |
+          for f in attest/*; do
+            sha256sum "$f" >> attest/digests.sha256
+          done
+          sha256sum attest/digests.sha256 | tee attest/digests.sha256.sha256
+
+      - name: (Placeholder) Anchor digests to blockchain
+        run: |
+          echo "This step is a placeholder. Replace with your organization's"
+          echo "blockchain anchoring command (e.g., call a signed oracle, mint a tx)."
+          cat attest/digests.sha256
+
+      - name: Upload attest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aln-attest
+          path: attest

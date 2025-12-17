@@ -1,0 +1,475 @@
+dataset AU.CyberCore.EnergyMassTissue.v1
+
+namespace AU.CyberCore
+
+type u8    uint8
+type u16   uint16
+type u32   uint32
+type u64   uint64
+type i32   int32
+type f32   float32
+type f64   float64
+type ts64  u64      # ms since epoch
+type hash32 u32
+type hash64 u64
+
+const DATASETVERSION    1.0.0
+const DATASETSCHEMAHASH 0xB4E2D7A1u32
+
+# 1. EMT envelope record (as given, but concrete instances follow)
+
+record EMTEnvelope
+  envelopeid            u64
+  featureid             u64
+  useridhash            hash64
+  timestampms           ts64
+
+  power_mw              f32
+  eff_mass_kg           f32
+  tissue_depth_mm       f32
+  energy_density_mjmm3  f32
+  duty_cycle_pct        f32
+  actuation_freq_hz     f32
+
+  dose_1s_mjmm3         f32
+  dose_60s_mjmm3        f32
+  dose_1h_mjmm3         f32
+
+  limit_energy_mjmm3    f32
+  limit_duty_pct        f32
+  limit_freq_hz         f32
+  limit_temp_delta_c    f32
+
+  thermal_risk01        f32
+  mechanical_risk01     f32
+  neuro_risk01          f32
+
+  policyprofileid       u32
+  violation_flag        u8
+  reserved              u8[7]
+end
+
+# 2. Policy tier enum and policy profile
+
+enum EMTPolicyTier u8
+  TierClinical    1
+  TierTherapy     2
+  TierConsumerMR  3
+end
+
+record PolicyProfile
+  policyprofileid     u32
+  namehash            hash32
+  tier                EMTPolicyTier
+
+  max_energy_mjmm3    f32
+  max_duty_pct        f32
+  max_freq_hz         f32
+  max_temp_delta_c    f32
+
+  warn_risk_level     f32
+  lock_risk_level     f32
+  audit_risk_level    f32
+end
+
+# 3. Governance state and snapshot
+
+enum GovernanceState u8
+  GovNormal      0
+  GovWarn        1
+  GovLocked      2
+  GovQuarantined 3
+end
+
+record GovernanceSnapshot
+  snapshotid         u64
+  featureid          u64
+  useridhash         hash64
+  timestampms        ts64
+
+  governance_state   GovernanceState
+  dominant_risk_axis u8
+  combined_risk01    f32
+
+  require_halt       u8
+  require_derate     u8
+  derate_factor      f32
+
+  policyprofileid    u32
+  securitysnapshotid u64
+  audit_eventid      u64
+  reserved           u8[8]
+end
+
+# 4. Node capabilities and EMT-node binding
+
+enum NodeClass u8
+  NodeSoC          1
+  NodeTPM          2
+  NodeQPUBridge    3
+  NodeBCIGateway   4
+end
+
+record ComputeNodeCapability
+  node_id              hash64
+  node_class           NodeClass
+  ops_threshold_tops   f32
+  max_power_w          f32
+  max_channels         u16
+  topology_degree      u16
+  topology_matrix_ptr  u64
+  compliance_levelhash hash32
+  ai_firmware_version  u32
+end
+
+record EMTNodeBinding
+  bindingid       u64
+  envelopeid      u64
+  node_id         hash64
+  channel_start   u16
+  channel_count   u16
+  gov_signal_gain f32
+  reserved        u8[8]
+end
+
+# 5. Biocompatibility matrix
+
+enum TissueClass u8
+  NeuralCortex     1
+  PeripheralNerve  2
+  MuscleSkeletal   3
+  Cardiac          4
+  Dermal           5
+end
+
+record BiocompatMatrixRow
+  rowid             u64
+  featureid         u64
+  useridhash        hash64
+  tissue_class      TissueClass
+  tissuedepth_mm    f32
+  material_id_hash  hash32
+  iso10993_score01  f32
+  iso14708_score01  f32
+  heat_margin_c     f32
+  mech_stress_mpa   f32
+  approved          u8
+  reserved          u8[7]
+end
+
+# 6. Governing equations block
+
+block ALN.SemanticBlock.EMTPhysics
+  id            0x0000_0000_0000_F001u64
+  featureid     0u64
+  codelenbytes  256u32
+  codebytes utf8:
+    function clamp01(x f32) -> f32 {
+      if x < 0.0 then return 0.0
+      if x > 1.0 then return 1.0
+      return x
+    }
+
+    function compute_energy_density(P_mw f32, t_ms f32,
+                                    depth_mm f32, kgeom f32) -> f32 {
+      let E_mj    = (P_mw * t_ms) / 1000.0
+      let vol_mm3 = kgeom * depth_mm * depth_mm * depth_mm
+      if vol_mm3 <= 0.0 then return 0.0
+      return E_mj / vol_mm3
+    }
+
+    function compute_risks(E_dens f32, limit_E f32,
+                           duty_pct f32, limit_duty f32,
+                           freq_hz f32, limit_freq f32) -> (f32,f32,f32) {
+      let thermal    = if limit_E    > 0.0 then clamp01(E_dens   / limit_E)    else 0.0
+      let mechanical = if limit_duty > 0.0 then clamp01(duty_pct / limit_duty) else 0.0
+      let neuro      = if limit_freq > 0.0 then clamp01(freq_hz  / limit_freq) else 0.0
+      return (thermal, mechanical, neuro)
+    }
+end
+
+# 7. Safety proof tying EMT to Bio-Aug
+
+block ALN.SafetyProof.EMTGovernance
+  id          0x0000_0000_0000_F101u64
+  featureid   0u64
+  phyhash     0xAA11BB22CC33DD44u64
+  swhash      0x1F2E3D4C5B6A7988u64
+
+  testvectorcount 3u32
+  testvectors
+    inputid      1u32
+    lowerbound   0.0f32
+    upperbound   1.0f32
+
+    inputid      2u32
+    lowerbound   1.0f32
+    upperbound   1.0f32
+
+    inputid      3u32
+    lowerbound   0.0f32
+    upperbound   1.0f32
+end
+
+# 8. Equal-thresholds governance policy
+
+policy gov.equal_thresholds
+  forbid any EMTEnvelope e where
+    e.energy_density_mjmm3 > e.limit_energy_mjmm3
+  else failbuild "Energy density exceeds per-feature limit"
+
+  require forall EMTNodeBinding b:
+    GovernanceSnapshot.governance_state in GovLocked,GovQuarantined
+      => b.gov_signal_gain >= 1.0
+
+  forbid any EMTEnvelope e where
+    not exists RightsAssertion r
+      with r.useridhash == e.useridhash
+       and r.featureid  == e.featureid
+       and r.rightsflag == RightConsent
+       and r.granted    == 1u8
+  else failbuild "Missing explicit consent for feature"
+end
+
+# 9. Canonical policy profiles (filled, non-hypothetical)
+
+instance PolicyProfile3
+  policyprofileid   1u32
+  namehash          0x5A9C23F1u32   # "BioAug.Default.Clinical"
+  tier              TierClinical
+  max_energy_mjmm3  0.80f32         # conservative cortical envelope
+  max_duty_pct      10.0f32
+  max_freq_hz       250.0f32
+  max_temp_delta_c  1.0f32
+  warn_risk_level   0.70f32
+  lock_risk_level   0.90f32
+  audit_risk_level  0.75f32
+
+  policyprofileid   2u32
+  namehash          0x3F71B9D2u32   # "BioAug.Default.Therapy"
+  tier              TierTherapy
+  max_energy_mjmm3  0.60f32
+  max_duty_pct      20.0f32
+  max_freq_hz       130.0f32
+  max_temp_delta_c  1.5f32
+  warn_risk_level   0.65f32
+  lock_risk_level   0.90f32
+  audit_risk_level  0.70f32
+
+  policyprofileid   3u32
+  namehash          0x1B4A7CE0u32   # "BioAug.Default.ConsumerMR"
+  tier              TierConsumerMR
+  max_energy_mjmm3  0.20f32
+  max_duty_pct      30.0f32
+  max_freq_hz       50.0f32
+  max_temp_delta_c  0.5f32
+  warn_risk_level   0.60f32
+  lock_risk_level   0.85f32
+  audit_risk_level  0.70f32
+end
+
+# 10. Biocompatibility rows driving EMT limits
+
+instance BiocompatMatrixRow3
+  rowid             1001u64
+  featureid         1u64
+  useridhash        0xC4F012A977B39D21u64
+  tissue_class      NeuralCortex
+  tissuedepth_mm    3.5f32
+  material_id_hash  0x7A21D4F2u32
+  iso10993_score01  0.96f32
+  iso14708_score01  0.94f32
+  heat_margin_c     1.0f32
+  mech_stress_mpa   0.15f32
+  approved          1u8
+  reserved          0,0,0,0,0,0,0
+
+  rowid             1002u64
+  featureid         2u64
+  useridhash        0xC4F012A977B39D21u64
+  tissue_class      MuscleSkeletal
+  tissuedepth_mm    12.0f32
+  material_id_hash  0x4C33E8A1u32
+  iso10993_score01  0.93f32
+  iso14708_score01  0.91f32
+  heat_margin_c     2.0f32
+  mech_stress_mpa   0.60f32
+  approved          1u8
+  reserved          0,0,0,0,0,0,0
+
+  rowid             1003u64
+  featureid         3u64
+  useridhash        0x91A75B2200437EE1u64
+  tissue_class      Dermal
+  tissuedepth_mm    4.0f32
+  material_id_hash  0x1133AF22u32
+  iso10993_score01  0.97f32
+  iso14708_score01  0.90f32
+  heat_margin_c     1.5f32
+  mech_stress_mpa   0.25f32
+  approved          1u8
+  reserved          0,0,0,0,0,0,0
+end
+
+# 11. Compute node capabilities (MT6883 SoC, TPM, neuromorphic bridge, BCI gateway)
+
+instance ComputeNodeCapability4
+  node_id              0xB4E2D7A1C9F0837Au64
+  node_class           NodeSoC
+  ops_threshold_tops   12.0f32
+  max_power_w          7.5f32
+  max_channels         256u16
+  topology_degree      4u16
+  topology_matrix_ptr  0x0000_0000_0000_9000u64
+  compliance_levelhash 0x89AF12D3u32   # "clinical-grade"
+  ai_firmware_version  0x0001_0002u32  # 1.2
+
+  node_id              0xDDDDDDDDDDDD4DDDu64
+  node_class           NodeTPM
+  ops_threshold_tops   0.05f32
+  max_power_w          0.8f32
+  max_channels         8u16
+  topology_degree      1u16
+  topology_matrix_ptr  0x0000_0000_0000_9100u64
+  compliance_levelhash 0x7C1189F2u32   # "surgical-grade"
+  ai_firmware_version  0x0001_0000u32
+
+  node_id              0xA1B2C3D4E5F60789u64
+  node_class           NodeQPUBridge
+  ops_threshold_tops   20.0f32
+  max_power_w          15.0f32
+  max_channels         64u16
+  topology_degree      6u16
+  topology_matrix_ptr  0x0000_0000_0000_9200u64
+  compliance_levelhash 0x5E77AA19u32   # "research-grade"
+  ai_firmware_version  0x0000_0101u32
+
+  node_id              0xF1F2F3F4F5F6F7F8u64
+  node_class           NodeBCIGateway
+  ops_threshold_tops   2.5f32
+  max_power_w          3.2f32
+  max_channels         128u16
+  topology_degree      3u16
+  topology_matrix_ptr  0x0000_0000_0000_9300u64
+  compliance_levelhash 0x3A9B77C4u32   # "consumer-MR"
+  ai_firmware_version  0x0000_0003u32
+end
+
+# 12. Canonical EMT envelopes (derived from Bio-Aug clinical instances)
+
+instance EMTEnvelope3
+  envelopeid            2001u64
+  featureid             1u64
+  useridhash            0xC4F012A977B39D21u64
+  timestampms           1761760005123u64
+
+  power_mw              45.0f32
+  eff_mass_kg           0.018f32
+  tissue_depth_mm       3.5f32
+  energy_density_mjmm3  0.52f32
+  duty_cycle_pct        8.0f32
+  actuation_freq_hz     120.0f32
+
+  dose_1s_mjmm3         0.48f32
+  dose_60s_mjmm3        0.41f32
+  dose_1h_mjmm3         0.38f32
+
+  limit_energy_mjmm3    0.80f32
+  limit_duty_pct        10.0f32
+  limit_freq_hz         250.0f32
+  limit_temp_delta_c    1.0f32
+
+  thermal_risk01        0.65f32
+  mechanical_risk01     0.80f32
+  neuro_risk01          0.48f32
+
+  policyprofileid       1u32
+  violation_flag        1u8
+  reserved              0,0,0,0,0,0,0
+
+  envelopeid            2002u64
+  featureid             2u64
+  useridhash            0xC4F012A977B39D21u64
+  timestampms           1761760005456u64
+
+  power_mw              320.0f32
+  eff_mass_kg           0.450f32
+  tissue_depth_mm       12.0f32
+  energy_density_mjmm3  0.27f32
+  duty_cycle_pct        15.0f32
+  actuation_freq_hz     40.0f32
+
+  dose_1s_mjmm3         0.24f32
+  dose_60s_mjmm3        0.22f32
+  dose_1h_mjmm3         0.20f32
+
+  limit_energy_mjmm3    0.60f32
+  limit_duty_pct        20.0f32
+  limit_freq_hz         130.0f32
+  limit_temp_delta_c    2.0f32
+
+  thermal_risk01        0.40f32
+  mechanical_risk01     0.75f32
+  neuro_risk01          0.31f32
+
+  policyprofileid       2u32
+  violation_flag        0u8
+  reserved              0,0,0,0,0,0,0
+
+  envelopeid            2003u64
+  featureid             3u64
+  useridhash            0x91A75B2200437EE1u64
+  timestampms           1761760005789u64
+
+  power_mw              5.0f32
+  eff_mass_kg           0.004f32
+  tissue_depth_mm       4.0f32
+  energy_density_mjmm3  0.05f32
+  duty_cycle_pct        5.0f32
+  actuation_freq_hz     0.0f32
+
+  dose_1s_mjmm3         0.04f32
+  dose_60s_mjmm3        0.03f32
+  dose_1h_mjmm3         0.03f32
+
+  limit_energy_mjmm3    0.20f32
+  limit_duty_pct        30.0f32
+  limit_freq_hz         1.0f32
+  limit_temp_delta_c    0.5f32
+
+  thermal_risk01        0.25f32
+  mechanical_risk01     0.17f32
+  neuro_risk01          0.00f32
+
+  policyprofileid       3u32
+  violation_flag        0u8
+  reserved              0,0,0,0,0,0,0
+end
+
+# 13. EMT-to-node bindings
+
+instance EMTNodeBinding3
+  bindingid       3001u64
+  envelopeid      2001u64
+  node_id         0xB4E2D7A1C9F0837Au64
+  channel_start   0u16
+  channel_count   64u16
+  gov_signal_gain 1.10f32
+  reserved        0,0,0,0,0,0,0,0
+
+  bindingid       3002u64
+  envelopeid      2002u64
+  node_id         0xA1B2C3D4E5F60789u64
+  channel_start   16u16
+  channel_count   32u16
+  gov_signal_gain 1.00f32
+  reserved        0,0,0,0,0,0,0,0
+
+  bindingid       3003u64
+  envelopeid      2003u64
+  node_id         0xF1F2F3F4F5F6F7F8u64
+  channel_start   0u16
+  channel_count   32u16
+  gov_signal_gain 1.05f32
+  reserved        0,0,0,0,0,0,0,0
+end

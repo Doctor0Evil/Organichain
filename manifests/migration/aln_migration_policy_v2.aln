@@ -1,0 +1,44 @@
+ALN_MANIFEST MIGRATION_POLICY_V2
+  author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+  policy_frame: NO_PYTHON_STRICT
+  enforcement: [BLOCK_PYTHON, ONLY_ALN, VALIDATE_ALN]
+  migration_steps:
+    - step: remove_python_artifacts
+      timestamp: 2025-11-25T05:31:00Z
+      hash: QmXYZ1
+      result: success
+    - step: create_aln_replacements
+      timestamp: 2025-11-25T05:32:00Z
+      hash: QmXYZ2
+      result: success
+    - step: add_ci_enforcement_job
+      timestamp: 2025-11-25T05:33:00Z
+      hash: QmXYZ3
+      result: success
+    - step: integrate_aln_validator
+      timestamp: 2025-11-25T05:34:00Z
+      hash: QmXYZ4
+      result: success
+    - step: package_aln_artifacts
+      timestamp: 2025-11-25T05:35:00Z
+      hash: QmXYZ5
+      result: success
+    - step: add_vm_energy_security_module
+      timestamp: 2025-11-25T05:36:00Z
+      hash: QmXYZ6
+      result: success
+    - step: add_cost_optimization_module
+      timestamp: 2025-11-25T05:37:00Z
+      hash: QmXYZ7
+      result: success
+  compliance_hooks:
+    - hook: audit
+      trigger: on_policy_violation
+      action: [log_to_chain, quarantine_commit, notify_admins]
+    - hook: rollback
+      trigger: on_validator_fail
+      action: [revert_to_last_good_commit]
+    - hook: alert
+      trigger: on_repeat_violation
+      action: [escalate_director_council]
+END MIGRATION_POLICY_V2

@@ -1,0 +1,35 @@
+MODULE device-manager-replacement
+  manifest:
+    author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+    original_source: modules/augmentation/device_manager.py
+    replaced_on: 2025-11-25T00:00:00Z
+    policy: NO-PYTHON-STRICT
+  DEVICE_IDENTITY:
+    fields: [device_id, owner_did, firmware_hash, risk_level, consent_status]
+  REGISTRATION_FLOW:
+    steps: [verify_owner_did, firmware_integrity, rights_check, policy_eval, anchor_blockchain]
+  SESSION:
+    metrics: [cognitive_load, entropy, latency]
+    thresholds:
+      cognitive_load_max: 0.85
+      entropy_max: 0.10
+  FUNCTIONS:
+    function Register(device) {
+      if (!VerifyDID(device.owner_did)) { return BLOCK }
+      if (!CheckFirmware(device.firmware_hash)) { return QUARANTINE }
+      if (!Rights.ok(device.owner_did)) { return ESCALATE }
+      AuditLog.record("DEVICE_REGISTER", device.device_id)
+      AnchorBlockchain("DEVICE", device.device_id)
+      return APPROVE
+    }
+    function StartSession(device_id, user_did) {
+      if (!Consent.valid(user_did)) { return QUARANTINE }
+      AuditLog.record("SESSION_START", device_id, user_did)
+      return APPROVE
+    }
+    function UpdateMetrics(session_id, metrics) {
+      if (metrics.cognitive_load > SESSION.thresholds.cognitive_load_max) { TriggerForensic(session_id, "COGNITIVE_OVERLOAD") }
+      if (metrics.entropy > SESSION.thresholds.entropy_max) { TriggerQuarantine(session_id) }
+      AuditLog.record("METRICS_UPDATE", session_id)
+    }
+END device-manager-replacement

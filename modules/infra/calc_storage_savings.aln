@@ -1,0 +1,16 @@
+ALN_MODULE CALC_STORAGE_SAVINGS
+  author_did: did:ion:EiD8J2b3K8k9Q8x9L7m2n4p1q5r6s7t8u9v0w1x2y3z4A5B6C7D8E9F0
+  description: "Nanobyte calculation of storage savings after Python removal."
+  constants:
+    python_total_bytes = 7600
+    aln_total_bytes = 3200
+    nano = 0.000000001
+  compute:
+    python_nano = python_total_bytes / nano
+    aln_nano = aln_total_bytes / nano
+    savings_nano = python_nano - aln_nano
+  output:
+    - "Python files (nanobytes): {python_nano}"
+    - "ALN files (nanobytes): {aln_nano}"
+    - "Storage savings (nanobytes): {savings_nano}"
+END CALC_STORAGE_SAVINGS

@@ -1,0 +1,259 @@
+dataset AU.XR.BioAug.HandheldXRGuard.v1
+purpose XR-phone / XR-device biomechanical and visual-safety guard
+        integrated with AU.BioAug.SecureBiomech.v1 records.
+
+namespace AU.XR.BioAug
+
+import AU.BioAug.SecureBiomech.v1 as BioAug
+
+# 0. GLOBAL TYPES
+
+type u8      uint8
+type u16     uint16
+type u32     uint32
+type u64     uint64
+type f32     float32
+type f64     float64
+type ts64    u64        # unix epoch ms
+type hash64  u64
+type bit8    u8
+
+# 1. XR CAPABILITY ENUMS
+
+enum XRDeviceClass u8
+  XRPhone          1   # handheld, slab phone with XR stack
+  XRGlasses        2   # optical see-through, tethered
+  XRHeadset        3   # opaque HMD
+end
+
+enum XRUseProfile u8
+  DailyUse         1
+  ClinicalSupport  2
+  ResearchSandbox  3
+end
+
+enum XRVizMode u8
+  ARPassthrough    1
+  VRImmersive      2
+  MRComposite      3
+end
+
+# 2. XR DEVICE PROFILE (NO PHI)
+
+record XRDeviceProfile
+  device_id_hash       hash64      # stable hash of device identifier
+  useridhash           hash64      # FK into BioAug.AUUser.useridhash
+  xr_class             XRDeviceClass
+  use_profile          XRUseProfile
+  max_fov_deg          f32         # physical horizontal FOV
+  max_refresh_hz       f32         # panel or effective XR refresh
+  max_luminance_nits   f32         # calibrated peak
+  motion_to_photon_ms  f32         # pipeline latency
+  ipd_mm_nominal       f32         # interpupillary distance used
+  reserved             u32         # alignment and future fields
+end
+
+# 3. XR SESSION TELEMETRY SNAPSHOT
+
+record XRSessionSnapshot
+  snapshot_id          u64
+  device_id_hash       hash64
+  useridhash           hash64
+  timestampms          ts64
+
+  viz_mode             XRVizMode
+  content_luminance_nits f32
+  frame_rate_hz        f32
+  angular_velocity_dps f32     # head/phone rotation (deg/s)
+  linear_accel_ms2     f32     # net device accel (m/s^2)
+
+  # biomech coupling (derived)
+  coupled_featureid    u64     # FK to BioAug.BiomechFeature.featureid or 0
+  net_actuation_delta  f32     # normalized 0-1 actuation delta this frame
+  nausea_score01       f32     # derived cybersickness / VIMS indicator
+  eye_strain_score01   f32     # derived visual strain indicator
+
+  # safety classification by runtime
+  safety_state         BioAug.SecurityState
+  threatflag           BioAug.ThreatFlag
+end
+
+# 4. XR SAFETY ENVELOPE
+
+record XRSafetyEnvelope
+  envelopeid           u64
+  device_id_hash       hash64
+  useridhash           hash64
+
+  max_luminance_nits   f32      # content cap in current mode
+  max_frame_rate_hz    f32      # lower than panel max if needed
+  max_angvel_dps       f32      # vestibular comfort bound
+  max_linacc_ms2       f32
+  max_nausea_score01   f32
+  max_eye_strain01     f32
+  max_net_actuation    f32      # max allowed XR-driven actuation (0-1)
+
+  profile              XRUseProfile
+  active               bit8     # 1 = enforced, 0 = inactive
+  reserved             u8, u8, u8
+end
+
+# 5. XR–BIOAUG COUPLING RECORD
+
+record XRBiomechBinding
+  binding_id           u64
+  device_id_hash       hash64
+  useridhash           hash64
+  featureid            u64      # from BioAug.BiomechFeature
+  linkid               u64      # from BioAug.BCILink.linkid or 0 if none
+
+  allowed_modes_mask   u32      # bitmask of XRDeviceClass / XRVizMode combinations
+  max_session_minutes  u16
+  cooloff_minutes      u16
+
+  max_daily_energy_mjmm3 f32    # mirrors EMT-style bound, XR-driven
+  max_daily_time_min   f32
+end
+
+# 6. XR SAFETY POLICIES (ALN-ONLY SEMANTICS)
+
+block ALN.SemanticBlock.XRVisualSafety
+  id        0x5852522D5649532D534146455459u64  # "XRR-VIS-SAFETY"
+  featureid 0u64   # applies at dataset scope
+
+  codelenbytes 480u32
+  codebytes utf8:
+    # Visual/kinetic comfort constraints for XR sessions.
+    #
+    # These constraints are aligned with emerging XR visual
+    # performance guidance and ISO 9241-series ergonomics
+    # principles, but expressed as hard ALN conditions.
+
+    function within(v f32, lo f32, hi f32) -> bool {
+      if v < lo then return false
+      if v > hi then return false
+      return true
+    }
+
+    policy xr.session_visual_bounds
+      forall s in XRSessionSnapshot, e in XRSafetyEnvelope:
+        s.device_id_hash == e.device_id_hash
+        and e.active == 1
+        =>
+        (
+          s.content_luminance_nits <= e.max_luminance_nits + 5.0
+          and s.frame_rate_hz <= e.max_frame_rate_hz + 1.0
+          and s.angular_velocity_dps <= e.max_angvel_dps + 10.0
+          and s.linear_accel_ms2 <= e.max_linacc_ms2 + 0.5
+          and s.nausea_score01 <= e.max_nausea_score01 + 0.02
+          and s.eye_strain_score01 <= e.max_eye_strain01 + 0.02
+        )
+    end
+
+    policy xr.session_mode_profile_guard
+      forall s in XRSessionSnapshot, d in XRDeviceProfile, e in XRSafetyEnvelope:
+        s.device_id_hash == d.device_id_hash
+        and s.device_id_hash == e.device_id_hash
+        and e.active == 1
+        =>
+        (
+          # ClinicalSupport and ResearchSandbox require more conservative bounds.
+          (e.profile == ClinicalSupport and s.viz_mode != VRImmersive)
+          or (e.profile == ResearchSandbox)
+          or (e.profile == DailyUse)
+        )
+    end
+end
+
+block ALN.SemanticBlock.XRBiomechCoupling
+  id        0x5852522D42494F2D474F5645524Eu64  # "XRR-BIO-GOVERN"
+  featureid 0u64
+
+  codelenbytes 544u32
+  codebytes utf8:
+    # XR-driven actuation must remain bounded relative to
+    # BioAug.BCILink safety configuration.
+
+    function actuation_ok(net_delta f32, max_allowed f32) -> bool {
+      if net_delta <= max_allowed + 0.01 then return true
+      return false
+    }
+
+    policy xr.no_overdrive_of_bioactuation
+      forall s in XRSessionSnapshot,
+             b in XRBiomechBinding,
+             l in BioAug.BCILink:
+        s.device_id_hash == b.device_id_hash
+        and s.useridhash == b.useridhash
+        and s.coupled_featureid == b.featureid
+        and l.linkid == b.linkid
+        =>
+        (
+          actuation_ok(s.net_actuation_delta, b.max_net_actuation)
+          and s.net_actuation_delta <= l.maxactuationdelta + 0.01
+          and l.hashumaninloop == 1u8
+          and l.hasexplicitconsent == 1u8
+        )
+    end
+
+    policy xr.enforce_session_duration_and_cooloff
+      forall s in XRSessionSnapshot, b in XRBiomechBinding:
+        s.device_id_hash == b.device_id_hash
+        and s.useridhash == b.useridhash
+        =>
+        (
+          # Expressed informally here; compiled implementation
+          # must track cumulative session minutes and enforce
+          # cool-off intervals per binding.
+          true
+        )
+    end
+end
+
+# 7. CANONICAL INSTANCES (FILLED, NON-HYPOTHETICAL)
+
+instance XRDeviceProfile1
+  device_id_hash       0xB4E2D7A1C9F0837Au64
+  useridhash           0xC4F012A977B39D21u64
+  xr_class             XRPhone
+  use_profile          DailyUse
+  max_fov_deg          90.0f32
+  max_refresh_hz       120.0f32
+  max_luminance_nits   1200.0f32
+  motion_to_photon_ms  18.0f32
+  ipd_mm_nominal       64.0f32
+  reserved             0u32
+end
+
+instance XRSafetyEnvelope1
+  envelopeid           70001u64
+  device_id_hash       0xB4E2D7A1C9F0837Au64
+  useridhash           0xC4F012A977B39D21u64
+
+  max_luminance_nits   800.0f32
+  max_frame_rate_hz    90.0f32
+  max_angvel_dps       180.0f32
+  max_linacc_ms2       9.0f32
+  max_nausea_score01   0.35f32
+  max_eye_strain01     0.40f32
+  max_net_actuation    0.10f32
+
+  profile              DailyUse
+  active               1u8
+  reserved             0u8, 0u8, 0u8
+end
+
+instance XRBiomechBinding1
+  binding_id           81001u64
+  device_id_hash       0xB4E2D7A1C9F0837Au64
+  useridhash           0xC4F012A977B39D21u64
+  featureid            1u64           # matches NeuroInterface feature
+  linkid               1001u64        # matches BCILink1
+
+  allowed_modes_mask   0x0000_0007u32 # XRPhone + AR/MR only
+  max_session_minutes  30u16
+  cooloff_minutes      15u16
+
+  max_daily_energy_mjmm3 0.50f32
+  max_daily_time_min     120.0f32
+end

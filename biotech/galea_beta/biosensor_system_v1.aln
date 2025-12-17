@@ -1,0 +1,42 @@
+// File: /biotech/galea_beta/biosensor_system_v1.aln
+# HEX: 505AB09C2D421F5208B4ECE0951C5AA7
+AUGUSER_BIOSENSOR_SYSTEM "GALEA_BETA" {
+  COMPATIBILITY: ["VARJO_XR3", "VARJO_AERO"]
+  EEG: {
+    TYPE: "Dry, Active",
+    CHANNELS: 10,
+    PLACEMENTS: ["F1","F2","C3","CZ","C4","P3","PZ","P4","O1","O2"]
+  }
+  EAR_CLIP: {
+    PPG: true,
+    EEG_REF_BIAS: true
+  }
+  FACE_PAD: [
+    {TYPE: "EMG", CHANNELS: 4},
+    {TYPE: "EXG", CHANNELS: 2, PLACEMENT: ["Fp1","Fp2"]},
+    {TYPE: "EOG", CHANNELS: 2, MODES: ["VERTICAL","HORIZONTAL"]},
+    {TYPE: "EDA", CHANNELS: 1, PLACEMENT: ["FOREHEAD","EXTERNAL"]}
+  ]
+  DATA_HANDLING: {
+    EXG: {RES: 24, MAX_HZ: 500},
+    PPG: {RES: 18, MAX_HZ: 400},
+    EDA: {RES: 16, MAX_HZ: 25},
+    TRANSFER: ["DUAL_WIFI","MICROSD"]
+  }
+  EYE_TRACK: "VARJO IMAGING",
+  IMU: {AXES: 6, HZ: 1600},
+  MAG: {AXES: 3, HZ: 20},
+  POWER: {
+    INPUT: {PORT: "USB-C", VALUE: "5V/1A"},
+    OUTPUT: {PORT: "USB-C", VALUE: "5V/0.5A"},
+    BATTERY: {TYPE: "Li-ion", CAP: "2000mAH"}
+  }
+  RUNTIME: "TBD"
+  SOFTWARE: [
+    "UNITY_SDK", "UNREAL_SDK",
+    {LANGUAGES: ["PYTHON","C++","JAVA","C#","JULIA","MATLAB","R","RUST"]},
+    "GUI_TOOLS", "REMOTE_STREAM"
+  ]
+  FILE_FORMATS: ["BDF+","CSV"], STREAM_FORMATS: ["SERIAL","LSL","UDP","OSC"]
+  HEAD_BAND_SIZE_CM: [55,61]
+}

@@ -1,0 +1,73 @@
+# Path: .aln/datashards/qpu/github-aln-bitrunner-orchestration.aln
+HEADER,ALN-QPU-DATASHARD,GITHUB-ALN-BITRUNNER,VERSION,1.0.0,ENV,production
+META,owner,ALN-InfraNet-Core
+META,description,GitHub-ALN integration for policy-first scheduling to external bitrunners
+META,compliance,GDPR|HIPAA|SOC2|ISO27001|NIST-CSF|EU-AIACT-2024
+META,runner_labels,self-hosted|linux|x64|aln-bitrunner
+META,github_repo_url,https://github.com/ORG/REPO
+META,aln_chain_endpoint,https://aln-scheduler.api.mainnet
+META,aln_chain_network,ALN-MAINNET-NOVA
+META,metrics_topic,kafka://aln-metrics.cybernetic-energy.local:9092/topic/github-bitrunners
+
+SECTION,ALN_POLICY_ENGINE
+ROW,policy_id,scope,language_allowlist,max_cpu_cores,max_runtime_s,max_ram_mb,min_security_score,min_compliance_score,allow_blockchain_calls,allow_mr_ar
+ROW,policy-ci-pr,github_pr,Rust|Java|Matlab|Lua|Kotlin|SQL|ALN,4,900,8192,0.90,0.95,false,true
+ROW,policy-ci-main,github_main,Rust|Java|Matlab|Lua|Kotlin|SQL|ALN,8,1800,16384,0.92,0.97,false,true
+ROW,policy-sim-nanoswarm,nanoswarm_sim,ALN|Rust,32,7200,131072,0.96,0.99,true,true
+
+SECTION,ALN_POLICY_RULES
+ROW,rule_id,policy_id,rule_type,pattern,threshold,action,on_violation
+ROW,rule-no-crypto-mining,policy-ci-*,code_regex,"(xmrig|ethminer|stratum\+tcp|cryptonight|mining_pool)",0,block,fail-fast
+ROW,rule-no-unbounded-loops,policy-ci-*,static_analyzer,"while\s*\(true\)",0,block,fail-fast
+ROW,rule-mr-safety,policy-ci-*,mr_scene_check,"max_luminance_nits",1200,warn,require-human-review
+ROW,rule-bci-safety,policy-sim-nanoswarm,bci_constraint,"stimulation_current_ma",2,block,fail-fast
+
+SECTION,ALN_JOB_SCHEMA
+ROW,field,name,type,required
+ROW,1,job_id,string,true
+ROW,2,repo,string,true
+ROW,3,commit_sha,string,true
+ROW,4,pr_number,int,false
+ROW,5,policy_id,string,true
+ROW,6,requested_labels,string[],true
+ROW,7,region,string,true
+ROW,8,privacy_tier,string,true
+ROW,9,est_energy_kwh,float,true
+ROW,10,max_runtime_s,int,true
+ROW,11,runner_class,string,true
+
+SECTION,ALN_GITHUB_INTEGRATION
+ROW,command,name,inputs,outputs,description
+ROW,cmd,aln.github.fetch_pr,"pr_number","json_pr","Fetch PR metadata, diff summary, and author"
+ROW,cmd,aln.github.policy_eval,"json_pr|policy_id","policy_result_json","Run ALN+Rego policy and static analysis"
+ROW,cmd,aln.github.register_job,"policy_result_json","job_ticket_json","Register on-chain job and price on ALN"
+ROW,cmd,aln.github.emit_check,"job_ticket_json|status","none","Emit GitHub Check Run with ALN job URL"
+
+SECTION,ALN_BITRUNNER_PROFILE
+ROW,profile_id,labels,region,topology,peak_tops,vram_gb,energy_source,pricing_kwh_usd
+ROW,bitrunner-neuro-a,self-hosted|linux|x64|aln-bitrunner|neuromorphic,us-west-2,neuromorphic-edge,120,64,solar+grid,0.11
+ROW,bitrunner-mrar-eu,self-hosted|linux|x64|aln-bitrunner|mr-ar,eu-central-1,gpu-farm,350,128,wind+grid,0.14
+
+SECTION,ALN_ENERGY_MARKET
+ROW,field,name,type,description
+ROW,1,job_energy_quote_kwh,float,"Estimated energy for job based on prior runs"
+ROW,2,job_price_usd,float,"Price quoted to ALN marketplace"
+ROW,3,job_reliability_score,float,"Historical reliability of selected bitrunner"
+ROW,4,job_carbon_intensity_gco2_per_kwh,float,"Carbon intensity of energy source"
+
+SECTION,ALN_METRICS_MAPPING
+ROW,metric_field,source_key,description
+ROW,wall_time_s,runner.wall_clock_s,"Total runtime of job on bitrunner"
+ROW,cpu_time_s,runner.cpu_time_s,"CPU time"
+ROW,energy_kwh,runner.energy_kwh,"Measured or estimated energy consumption"
+ROW,exit_code,runner.exit_code,"Process exit code"
+ROW,code_hash,aln.code_hash,"Deterministic hash of checked-out source"
+ROW,policy_status,aln.policy_status,"pass|warn|fail"
+
+SECTION,ALN_SECURITY
+ROW,control_id,framework,mapping,description
+ROW,CTRL-AUDIT-LOG,NIST-CSF,DE.AE-5,"All job events logged immutably to ALN chain and SIEM"
+ROW,CTRL-ACCESS,HIPAA,164.312(b),"Bitrunner access logged with user, time, purpose"
+ROW,CTRL-CRYPTO-MISUSE,GITHUB-AUP,ACCEPTABLE-USE-CRYPTO,"Policies prohibit running mining or abusive workloads on GitHub-hosted runners"
+
+FOOTER,END-OF-DATASHARD

@@ -1,0 +1,101 @@
+aln_filename:/systems/BCI-NeuroGrid-DailyPipeline.aln
+format:ALN-CSV-1.0
+destination_path:/opt/infranet/qpu/datashards/BCI-NeuroGrid-DailyPipeline.aln
+
+#section,type,id,key,value
+section,meta,PIPELINE,id,BCI-NEUROGRID-DAILY-2025-12-14
+section,meta,PIPELINE,domain,neuromorphic-bci-biomech
+section,meta,PIPELINE,language,rust-2021
+section,meta,PIPELINE,aln_invariant,true
+section,meta,PIPELINE,ci_profile,github-actions
+section,meta,PIPELINE,metrics_backend,prometheus
+section,meta,PIPELINE,research_manifest_path,/opt/infranet/research/manifests/bci-neurogrid.json
+
+section,crate,aln-model,name,aln-model
+section,crate,aln-model,path,crates/aln-model
+section,crate,aln-model,role,aln-core-schema
+section,crate,aln-model,features,serde-json|borsh
+
+section,crate,aln-codegen,name,aln-codegen
+section,crate,aln-codegen,path,crates/aln-codegen
+section,crate,aln-codegen,role,aln-to-rust-generator
+section,crate,aln-codegen,input_glob,aln/specs/**/*.aln
+section,crate,aln-codegen,output_dir,crates/generated-devices/src
+section,crate,aln-codegen,guard_struct,AdminActionGuard
+section,crate,aln-codegen,hal_trait,DeviceHal
+section,crate,aln-codegen,metrics_module,metrics
+
+section,crate,bci-devices,name,bci-devices
+section,crate,bci-devices,path,crates/bci-devices
+section,crate,bci-devices,role,bci-eeg-emg-device-layer
+section,crate,bci-devices,deps,aln-model|aln-codegen|embedded-hal
+section,crate,bci-devices,metrics_exporter,prometheus
+section,crate,bci-devices,research_tag,EEG-BCI-EDGE
+
+section,crate,neuromorphic-core,name,neuromorphic-core
+section,crate,neuromorphic-core,path,crates/neuromorphic-core
+section,crate,neuromorphic-core,role,cluster-and-entropy-engine
+section,crate,neuromorphic-core,deps,aln-model|rand|tokio|serde_json
+section,crate,neuromorphic-core,metric,cluster_entropy
+section,crate,neuromorphic-core,metric,cluster_energy_joules
+
+section,crate,research-manifest,name,research-manifest
+section,crate,research-manifest,path,crates/research-manifest
+section,crate,research-manifest,role,manifest-writer
+section,crate,research-manifest,format,json
+section,crate,research-manifest,ci_update,true
+
+section,ci,job,codegen,name,aln-codegen
+section,ci,job,codegen,stage,build
+section,ci,job,codegen,cmd,cargo run -p aln-codegen -- --in aln/specs --out crates/generated-devices/src
+
+section,ci,job,lint,name,lint-and-fmt
+section,ci,job,lint,stage,verify
+section,ci,job,lint,cmd,cargo fmt --all && cargo clippy --all-targets --all-features -- -D warnings
+
+section,ci,job,test,name,unit-and-integration
+section,ci,job,test,stage,test
+section,ci,job,test,cmd,cargo test --all --features "sim-eeg sim-neuro"
+
+section,ci,job,manifest,name,update-research-manifest
+section,ci,job,manifest,stage,post-test
+section,ci,job,manifest,cmd,cargo run -p research-manifest -- --out /opt/infranet/research/manifests/bci-neurogrid.json
+
+section,ci,job,publish,name,publish-crates
+section,ci,job,publish,stage,release
+section,ci,job,publish,cmd,cargo publish -p bci-devices -p neuromorphic-core
+
+section,metrics,spec,eeg_samples_total,type,counter
+section,metrics,spec,eeg_samples_total,help,total EEG samples ingested
+section,metrics,spec,eeg_dropped_frames_total,type,counter
+section,metrics,spec,eeg_dropped_frames_total,help,total dropped frames in EEG pipeline
+section,metrics,spec,bci_decoding_latency_seconds,type,histogram
+section,metrics,spec,bci_decoding_latency_seconds,buckets,0.002|0.005|0.01|0.02|0.05
+section,metrics,spec,cluster_entropy,type,gauge
+section,metrics,spec,cluster_entropy,help,Shannon entropy per neuromorphic cluster
+section,metrics,spec,cluster_energy_joules,type,gauge
+section,metrics,spec,cluster_energy_joules,help,energy per neuromorphic cluster
+
+section,legal,constraint,hipaa_required,true
+section,legal,constraint,gdpr_required,true
+section,legal,constraint,fda_device_class,2
+section,legal,constraint,data_retention_days,365
+section,legal,constraint,admin_mfa_required,true
+
+section,geo,site,LAB-NA,location,North-America
+section,geo,site,LAB-EU,location,Europe
+section,geo,site,LAB-ME,location,Middle-East
+section,geo,site,LAB-APAC,location,East-Asia
+section,geo,site,LAB-OCE,location,Oceania
+
+section,math,invariant,load_balance_formula,L_i=gamma_i/C_i
+section,math,invariant,description,memory-aware lane load computed daily from metrics
+
+section,bridge,engine,XR-AU,path,bridges/xr-au
+section,bridge,engine,XR-AU,protocols,WebSocket|HTTP3|gRPC
+section,bridge,engine,XR-AU,role,smart-city-and-gaming-router
+
+section,agent,ai,mistral,endpoint,ws://mistral-router.internal/agent
+section,agent,ai,qwen,endpoint,ws://qwen-router.internal/agent
+section,agent,ai,routing_mode,policy-driven
+section,agent,ai,aln_source,/opt/infranet/qpu/datashards/BCI-NeuroGrid-DailyPipeline.aln

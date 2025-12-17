@@ -1,0 +1,24 @@
+SECTION,SCHEMA
+ROW,field,dtype,description
+ROW,risk_score,f64,0.0..1.0 overall risk
+ROW,ed_percent,f64,0.0..100.0 effective energy drain percent
+ROW,sf_psych,f64,>=0.0 psych load factor
+ROW,h_mod,u64,hash modulus derived from SHA3-512
+FOOTER,ENDOFDATASET
+
+SECTION,METADATA
+ROW,version,1.0.0
+ROW,schema_hash,0x9A37C4F1
+ROW,namespace,AU.BioAug.RiskSampleV1
+ROW,origin,BioAugClinical-Regulator
+ROW,device_class,III
+ROW,iec_62304_class,C
+ROW,iso_14971_profile,high_hazard
+FOOTER,ENDMETADATA
+
+SECTION,INSTANCES
+# useridhash,risk_score,ed_percent,sf_psych,h_mod
+ROW,0xC4F012A977B39D21,0.23,23.0,0.41,6763589210453319123
+ROW,0x91A75B2200437EE1,0.61,61.0,0.97,11593348772044100211
+ROW,0x7D3499E2A0F1FC33,0.87,87.0,1.32,3377449185012299344
+FOOTER,ENDINSTANCES
