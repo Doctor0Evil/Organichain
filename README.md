@@ -9,66 +9,28 @@
 
 <img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
 
-Welcome to the official source for the Augmented-Logic Network (ALN) programming language: an advanced, modular, and rigorously schema-driven domain-specific language crafted for high-integrity biosignal workflow management in Brain-Computer Interface platforms, cybernetic systems, nanotechnology, and pioneering Smart City infrastructures.
+Organichain is a proposed “organic-computing” blockchain that couples an Augmented Logic Network (ALN) style data/energy model with neuromorphic and neural-network validators, with an explicit focus on human biological safety and governance.  It treats neural hardware and neural-network nodes (including neuromorphic chips like Loihi-class accelerators) as first-class consensus participants, rather than just off-chain oracles, while enforcing strict, medically grounded safety envelopes and audit trails over all cognitive or biosignal-derived decisions.
 
-***
+## Core architectural idea
 
-## Overview of ALN
+Organichain fits into the CEM / ALN pattern where every agent and node has an energy state in internal units such as AU.ET (usage energy) and CSP (structural / trust budget), derived from external resources via deterministic, floor-based mappings that provably forbid “minting” extra value.  In an Organichain variant, these same AU.ET and CSP axes gate not only smart-contract execution, but also neural consensus activity, so each neuromorphic node’s participation is bounded by energy, risk and biosafety budgets tied to real physical limits, such as SAR and current density if the node drives implants.
 
-ALN is engineered as a robust, secure foundation for augmented-user research, BCI operations, and distributed urban neurotech frameworks by incorporating:
+## Neural-network consensus layer
 
-- **Machine-Interpretable Strict Typing:** Each data field and neural signal is rigorously defined with precise, schema-enforced types (e.g., float32 for neural data streams, semantically tagged strings for metadata), ensuring runtime validation and eliminating vulnerabilities from third-party dependencies.
+In contrast to classical PoW/PoS, Organichain’s consensus is described as routing through neural-network nodes, aligned with current research on AI-optimized and neural-enhanced consensus that use deep and reinforcement learning to dynamically tune validator selection and difficulty.  Contemporary work already shows that combining DNNs and PPO-like agents can reduce consensus latency and energy while preserving security; Organichain extends this by treating neuromorphic/graph-based networks as the primary consensus substrate and binding them to a cryptographic, regulator-friendly audit layer.
 
-- **Extensible Modular Framework:** ALN utilizes versioned blocks such as `[header]`, `[channels]`, `[sampling]`, `[data]`, and `[footer]` to contain biosignal data and metadata, supporting evolution to future sensor types like quantum sensors and optogenetics while maintaining backward compatibility.
+## Organic and neuromorphic substrates
 
-- **Zero-Trust Security Architecture:** The language ecosystem enforces ephemeral, dynamic credentials integrated with enterprise identity providers (Microsoft Entra ID, GitHub), AI-supervised encrypted development tunnels, microsegmentation, and immutable cryptographic audit trails to safeguard proprietary data and mitigate supply chain risks.
+Within the broader Cybercore / InfraNet blueprint, neuromorphic chips such as Intel Loihi 2 and Akida 2.0 are modeled as “untrusted accelerators” that are wrapped by a strict attestation, zk-SNARK, and policy layer, so their spiking outputs can be used in a neurorights-compliant way.  Organichain inherits this stance: neuromorphic nodes contribute to consensus only when accompanied by composite proofs (combining host TPM/TEE quotes plus zk proofs of neuromorphic execution), and all internal latent states used to infer intentions or behaviors are treated as neurally-equivalent data subject to the strictest privacy and localization regimes (EU AI Act, Chilean neurorights, Colorado/California neural-data laws).
 
-- **Adaptive Schema Reflexivity Engine (ASRE):** A cryptographic proof mechanism that ensures every schema modification is formally verified for governance exclusivity, regulatory adherence, and long-term stability.
+## Human and biosafety governance
 
-- **Interoperability Bridges:** Native mappings to global data standards including BIDS-EEG, XDF/LSL for biosignal streaming, and FHIR for clinical interoperability, enabling seamless ecosystem integration.
+CEM already defines a multi-axis safety envelope—energy, RF exposure, SAR, current density, temperature rise—tied numerically to ICNIRP/IEEE/FCC limits and enforced by saturating arithmetic under a hash-chained ledger.  In an Organichain framing, consensus and governance decisions that touch biological systems (e.g., BCI control, nanoswarm actuation, exoskeleton power) are just specialized “abilities” that must pass three gates: legal/policy consent (neurorights and GDPR-grade), AU.ET/CSP budget sufficiency, and physical safety envelope constraints encoded in RadEnvelope-like structures and SafetyEpoch manifests.
 
-- **Embedded AI Validation:** Runtime enforcement of data integrity and policy adherence within containerized, signed modules, reducing risks from compromised external libraries and dependencies.
+## Mathematical validity and hash stamp
 
-***
+The underlying ALN/CEM runtime for such a chain uses provably non-minting mappings of external balances into internal AU.ET and CSP via compression constants and floor operations \(\mathrm{BE} = \lfloor A_\mathrm{src}/c_E \times 10^{d_\mathrm{ALN}}\rfloor\), ensuring that no sequence of valid ledger events can increase total supply beyond configured caps.  Every Organichain specification file (e.g., blueprint, QPU/neuromorphic datashards, safety policies) is sealed with a real SHA-256 hash stored alongside the ledger’s own epoch hashes, so IDEs, CI pipelines, and auditors can assert bitwise identity between the running consensus logic and the reviewed, safety-checked specification.
 
-## Core Features
+## Novel objects beyond current stacks
 
-- **Cryptographic Integrity & Immutable Auditing:** All schema versions and updates are cryptographically signed and locked under ASRE authority.
-
-- **Federated Device Authenticity & Tokenized Data Flows:** Supports secure, multi-modal IoT and AI-enabled wearable devices with blockchain-backed compliance tokens.
-
-- **Hot-Swappable Container Modules:** Ensures resilient and compliant operation for smart-city and BCI infrastructure with seamless fallbacks.
-
-- **Minimal External Dependence:** Self-contained core validation reduces reliance on mutable third-party APIs and libraries.
-
-- **Comprehensive Metadata Capture:** Detailed sensor and data attributes promote reproducibility and advanced multimodal analytics.
-
-***
-
-## Strategic Significance
-
-ALN underlies the integration of neurotechnology with Smart Cities, augmented users, BCI devices, cybernetics, and nanotech research systems. By internalizing all parsing, validation, and policy enforcement, ALN dramatically reduces operational disruptions from external dependency issues, ensuring continuity and regulatory certainty.
-
-***
-
-## Security and Compliance
-
-ALN meets and exceeds strict regulatory frameworks including GDPR, HIPAA, NIST CSF, and PCI-DSS. It provides audit-ready data integrity and continuous policy enforcement through cryptographically secured modules and immutable update chains managed by ASRE governance.
-
-***
-
-## Engagement and Contributions
-
-This repository invites contributions, issue reporting, and collaboration to evolve ALN as the sovereign global standard for AI-native biosignal languages powering next-generation neurotechnologies.
-
-***
-
-## Documentation and Resources
-
-- [Architecting ALN: The Definitive Blueprint](https://github.com/Doctor0Evil/ALN/blob/main/docs/ALN-Programming-Language%3A%20The%20language%20of%20the%20future.md)
-
-***
-
-For specific inquiries or requests for ALN module templates adapted to your hardware or smart city applications, please open an issue or contact the maintainers directly.
-
-***
+Within this ecosystem, several objects extend beyond common OpenAI/Alibaba-like stacks and are directly relevant to an Organichain design: RadEnvelopeQPU, a radiation and actuation envelope struct bound to neuromorphic/edge nodes; ALN-QPU-ShardDigest, a canonical hash over infra shards and energy parameters acting as a safety contract; and NeuroCompositeAttest, a composite attestation object that binds host TPM/TEE quotes, model-state commitments, and zk proofs for neuromorphic execution into one verifiable artifact.  Together with ALN-ConsentTrace and SafetyEpochManifest, these provide the building blocks for a blockchain where neural-network consensus is not only adaptive and efficient, but also cryptographically bounded, medically compliant, and rooted in physical, non-fictional safety proofs.
